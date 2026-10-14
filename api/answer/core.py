@@ -5,8 +5,10 @@ import os
 import random
 import time
 from abc import ABC, abstractmethod
+from re import sub
 from typing import Optional
 
+from api.answer.cache import CacheDAO
 from api.answer_check import check_answer
 from api.logger import logger
 
