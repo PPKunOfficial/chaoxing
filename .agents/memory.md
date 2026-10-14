@@ -10,7 +10,8 @@
 ## 版本控制
 
 - 已使用 Jujutsu colocated 模式，保留 Git 后端；禁止再次初始化或用 Git 写状态。
-- 前次本地提交：`utlovuxp` 为 CLI 重构，`npywrswo` 为 Jujutsu 文档与配置；`main` 和远端书签未移动，未推送。
+- 本地提交：`utlovuxp` CLI 重构、`npywrswo` Jujutsu 文档、`rrrklrkr` 工作流迁移、`nsuroxsp` API 施工方案、`tpyzokpu`/`txqptvwk`/`mylrlyor` API 阶段 2-4、`kzvmmpux` 记录更新。
+- `main` 已快进到 `kzvmmpux` 并推送到 `origin`；发布与提交是两步操作, 再次推送前先 `jj git fetch`。
 - 后续版本位置以 `jj status`、`jj log` 为准，不使用本记录推断工作区是否干净。
 
 ## 授权与未实施方案
@@ -34,4 +35,4 @@
 - 真源 `check-agents.sh` 检查六份规则与导航文件通过，未发现事实与现状混入。
 - 十六份 Markdown 的 UTF-8、LF、结尾换行和代码围栏检查通过，四十一个本地链接有效。
 - 文档迁移后的源码和 wheel 构建、CLI 帮助启动通过；业务测试未重跑，因本次只改文档与镜像上下文忽略范围。
-- 施工方案此前单独留在 `nsuroxsp`；本次重构的 change 为 `tpyzokpu`、`txqptvwk`、`mylrlyor`，均未推送。
+- 施工方案此前单独留在 `nsuroxsp`；`main` 已从 `kylyonvm` 快进到 `kzvmmpux` 并推送, 工作副本 `@` 为空提交, 不属于 `main`。
