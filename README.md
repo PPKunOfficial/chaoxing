@@ -25,19 +25,19 @@
 
 ### 源码运行（Python 3.13+）
 
-1. clone 项目至本地
+1. 使用 [Jujutsu](https://jj-vcs.github.io/jj/latest/) 克隆项目（Git 后端，兼容 GitHub）
 
 ```bash
-git clone --depth=1 https://github.com/Samueli924/chaoxing 
+jj git clone https://github.com/Samueli924/chaoxing chaoxing
 cd chaoxing
 ```
 
 2. 安装依赖
 
 ```bash
-pip install -r requirements.txt
+python -m pip install .
 ```
-或使用 `pip install .`（通过 pyproject.toml 安装依赖）
+安装后可使用 `chaoxing` 命令；开发时使用 `python -m pip install -e .`。
 
 3. (可选直接运行)
 
@@ -70,6 +70,12 @@ uv run --python 3.13 main.py
 ```bash
 uv run --python 3.13 main.py -c config.ini
 ```
+
+### 开发与版本管理
+
+- [文档索引](docs/README.md)
+- [开发说明](docs/开发说明.md)
+- [Jujutsu 工作流](docs/jj工作流.md)
 
 ### 打包文件运行
 1. 从最新[Releases](https://github.com/Samueli924/chaoxing/releases)中下载exe文件
