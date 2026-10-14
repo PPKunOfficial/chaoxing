@@ -8,7 +8,7 @@ from .config import init_config, str_to_bool
 
 
 def init_chaoxing(common_config, tiku_config, config_path=None):
-    from api.answer import Tiku
+    from api.answer.registry import get_tiku_from_config
     from api.base import Account, Chaoxing
     from api.logger import logger
 
@@ -18,7 +18,7 @@ def init_chaoxing(common_config, tiku_config, config_path=None):
         username = input("请输入你的手机号, 按回车确认\n手机号:")
         password = input("请输入你的密码, 按回车确认\n密码:")
 
-    tiku = Tiku.get_tiku_from_config(tiku_config, config_path=config_path)
+    tiku = get_tiku_from_config(tiku_config, config_path=config_path)
     tiku.init_tiku()
     provider = tiku_config.get("provider", "")
     providers = {name.strip() for name in provider.split(",")}

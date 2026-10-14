@@ -17,7 +17,7 @@ chaoxing = "chaoxing_app.cli:main"
 
 [tool.setuptools]
 py-modules = []
-packages = ["chaoxing_app", "api", "resource"]
+packages = ["chaoxing_app", "api", "api.answer", "api.answer.providers", "resource"]
 
 [tool.setuptools.package-data]
 resource = ["font_map_table.json"]

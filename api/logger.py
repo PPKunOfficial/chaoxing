@@ -13,9 +13,9 @@ MAX_LOG_BUFFER_SIZE = 1000
 def tqdm_sink(msg):
     manual_locked = False
     try:
-        # 动态获取 api.answer 模块中的 TikuManual 锁，避免循环导入
-        if 'api.answer' in sys.modules:
-            TikuManual = getattr(sys.modules['api.answer'], 'TikuManual', None)
+        # 动态获取手动题库模块中的 TikuManual 锁，避免循环导入
+        if 'api.answer.providers.manual' in sys.modules:
+            TikuManual = getattr(sys.modules['api.answer.providers.manual'], 'TikuManual', None)
             if TikuManual and getattr(TikuManual, '_manual_lock', None):
                 manual_locked = TikuManual._manual_lock.locked()
     except (AttributeError, KeyError, ImportError):
