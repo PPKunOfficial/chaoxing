@@ -11,17 +11,26 @@
 
 ### 现状对照（复核记录）
 
-- 复核依据：阶段 4 实施后重新读取 `api/`、`chaoxing_app/` 与调用方；离线回归基线为 `uv run --python 3.13 python -m unittest discover -s tests -t .`，103 项通过。
+- 复核依据：阶段 4 实施后重新读取 `api/`、`chaoxing_app/` 与调用方，并在仓库外运行离线探针（不联网）；离线回归基线为 `uv run --python 3.13 python -m unittest discover -s tests -t .`。
 - `api/answer.py` 已删除并拆为 `api/answer/` 包：查询管道 `core.py`、缓存 `cache.py`、回退 `fallback.py`、注册表 `registry.py`、各 provider `providers/`。本文其余部分凡引用 `api/answer.py` 的行号都已失效，仅作调研时记录保留。
-- 第四节五个缺陷在复核时仍然存在，当前位置如下（仅静态核对，未重新运行离线探针）：
+- 复核发现阶段 4 拆包本身引入了一处回归：`api/answer/core.py` 丢了 `sub` 与 `CacheDAO` 两个导入，题库启用时 `query`/`query_all` 首行即抛 `NameError`。已在 change `qvpsutuu` 修复并补回归，见下方「拆包回归」。
+- 第四节五个缺陷在复核时仍然存在，当前位置与实测证据如下：
   - Session 反复重建：`api/base.py:46-49` 的单例 `__new__` 与 `api/base.py:51-60` 每次调用都重建 Session 的 `__init__`；`get_session()`（`:67-69`）经 `cls()` 触发构造。
-  - 单题查询丢答案：`api/answer/core.py:102-117`，缓存未命中分支把 `self._query()` 的结果赋给 `answer` 后未返回；批量路径 `query_all`（`:119-177`）正常。同一名字 `cache_dao` 只在 `:97` 的缓存分支绑定，反馈分支 `:110` 使用的是未绑定的局部名。
-  - 缓存跨实例竞争：`api/answer/cache.py:24`，每个 `CacheDAO` 实例各自持有 `RLock`。
+  - 单题查询丢答案：`api/answer/core.py:104-119`，缓存未命中分支把 `self._query()` 的结果赋给 `answer`（`:105`）后未返回，最终落到 `:119` 的 `return None`；批量路径 `query_all`（`:121-179`）正常。同一名字 `cache_dao` 只在 `:99` 的缓存分支绑定，反馈分支 `:112` 使用的是未绑定的局部名（探针实测抛 `UnboundLocalError`）。
+  - 缓存跨实例竞争：`api/answer/cache.py:24`，每个 `CacheDAO` 实例各自持有 `RLock`。**已动态复现**：两个实例并发各写 200 条，期望 400 条、实际落盘 6 条、丢 394 条；Windows 上还会出现 `os.replace` 报 `WinError 5 拒绝访问` 与 `_read_cache` 报 `Permission denied`（一个线程持有目标文件时另一线程的原子替换失败）。
   - 测验状态跨任务共享：`api/base.py:292` 构造时归零、`:1083` 判定、`:1180` 自增；`chaoxing_app/cli.py:115` 在整个运行中只创建一个 `Chaoxing` 实例并复用给所有任务。
   - 直播失败未向外传播：`chaoxing_app/jobs.py:77` 丢弃 `run_live()` 的返回值，随后直接返回 `StudyResult.SUCCESS`。
-- 「缓存跨实例丢更新」与「共享题库反馈污染」仍属未复现的推断，不得当作已证实故障。
+- 「共享题库反馈污染」仍属未复现的推断；「缓存跨实例丢更新」已由探针复现，不再是推断。
 - 阶段 1 要求的脱敏 HTML/JSON、缓存与请求样本没有独立留档；阶段 5-6 实施前需按当前路径重新采集。
-- 本文状态段的授权范围未变化：只授权等价重构，阶段 5-6 与第四节缺陷修复仍需单独批准。
+- 本文状态段的授权范围未变化：只授权等价重构；第四节缺陷修复需单独批准，其中「补回拆包丢失的导入」属于恢复拆包前的等价行为，已作为独立 fix 处理。
+
+### 拆包回归（阶段 4 引入，已修复）
+
+- 现象：`api/answer/core.py` 使用 `sub(...)`（`query` 内 `:92`/`:93`，`query_all` 内同名处理）与 `CacheDAO()`（`:99`/`:128`），但拆包提交 `ae64220` 生成的模块导入区没有这两个名字；拆包前的 `api/answer.py` 同时有 `from re import sub` 与 `class CacheDAO`。运行时 `hasattr(api.answer.core, 'sub')` 与 `hasattr(api.answer.core, 'CacheDAO')` 都是 `False`。
+- 影响：题库启用（`DISABLE=False`）时 `query`/`query_all` 第一步就抛 `NameError`。`api/base.py:997` 的调用不在该处 `try` 内，异常经 `chaoxing_app/jobs.py` 的线程包装存入 `_error`，`run()` 随即以 `shutdown(immediate=True)` 收尾并重抛，整个学习流程中断；无题库配置时走 `DummyTiku` 提前返回，所以默认配置下不易察觉。
+- 修复：change `qvpsutuu` 补回 `from re import sub` 与 `from api.answer.cache import CacheDAO`，并新增 `tests/test_answer_query.py` 覆盖查询管道（导入完整性、批量查询写缓存、缓存命中跳过 provider、题号归一化复用缓存键、停用短路）。
+- 测试盲区：此前的 103 项回归只覆盖注册表顺序、实例默认值与日志缓冲，从未调用 `query`/`query_all`；「`api/answer/` 各类的 AST 与迁移前完全相同」的比对也不覆盖模块级导入。后续阶段应按调用路径补测试，而不是只比对类体。
+- 两条仍待授权的查询缺陷（单题丢答案、反馈分支未绑定 `cache_dao`）在这份新测试里以 `expectedFailure` 标记，修复后必须移除标记。
 
 ## 一、优先施工点
 
@@ -109,13 +118,13 @@ api/
 
 ## 四、需要单独处理的缺陷
 
-这些不属于“写法更 Pythonic”，应独立批准与 `fix` 提交，不在等价搬迁中偷偷修正。
+这些不属于“写法更 Pythonic”，应独立批准与 `fix` 提交，不在等价搬迁中偷偷修正。阶段 4 拆包自己引入的回归（缺失导入）见上面「拆包回归」，已作为独立 fix 修复。
 
 | 问题 | 证据及处理建议 |
 | --- | --- |
 | Session 反复重建 | 调研位置 `api/base.py:42-65`，复核位置 `:46-60`；离线探针确认两次获取不是同一 Session，新增 header 丢失。修复前明确并发策略，不能简单加初始化标志就宣称线程安全 |
-| 单题查询丢答案 | 调研位置 `api/answer.py:243-264`，拆包后 `api/answer/core.py:102-117`；探针得到单题 `None`、批量 `['B']`。反馈分支还引用未绑定的 `cache_dao`（复核为 `core.py:110`）。单独修查询管道 |
-| 缓存跨实例竞争 | 调研位置 `api/answer.py:37-39,132-137`，拆包后 `api/answer/cache.py:24`：每个 DAO 独立锁。推断风险：原子替换能防文件损坏，却不能保证不丢更新；先用确定性并发场景复现 |
+| 单题查询丢答案 | 调研位置 `api/answer.py:243-264`，拆包后 `api/answer/core.py:104-119`；探针得到单题 `None`、批量 `['B']`。反馈分支还引用未绑定的 `cache_dao`（复核为 `core.py:112`，探针实测 `UnboundLocalError`）。单独修查询管道 |
+| 缓存跨实例竞争 | 调研位置 `api/answer.py:37-39,132-137`，拆包后 `api/answer/cache.py:24`：每个 DAO 独立锁。**已复现**：两实例并发各写 200 条，落盘 6 条、丢 394 条，并伴随 `WinError 5`/`Permission denied`。原子替换能防文件损坏，但不能保证不丢更新；修法需先定一致性契约 |
 | 测验状态跨任务共享 | 调研位置 `api/base.py:388,1179,1276`，复核位置 `api/base.py:292,1083,1180` 的 `rollback_times`；`chaoxing_app/cli.py:115` 单实例跨任务复用。反馈也写入共享题库。缩小为每测验状态会改变提交行为，需要独立处理 |
 | 直播失败未向外传播 | `chaoxing_app/jobs.py:77` 忽略 `run_live()` 返回值。改为失败会触发章节重试，不应夹在文件合并里 |
 
@@ -130,7 +139,20 @@ single query result: None
 batch query result: ['B']
 ```
 
-缓存丢更新与共享反馈污染尚未动态复现；不得将推断写成已证实故障。
+第二次探针（补上缺失导入后隔离其余缺陷，另含并发缓存场景）观察到：
+
+```text
+single query result: None
+batch query result: ['B']
+feedback-mode single query raised: UnboundLocalError cannot access local variable 'cache_dao' where it is not associated with a value
+session identity preserved: False
+session header preserved: None
+cache keys expected: 400 stored: 6 lost: 394
+```
+
+第一次探针在缺失导入未被发现时运行，第二次补上导入以隔离其余缺陷；两次都只读、未联网。
+
+缓存丢更新已由第二次探针复现（见上）；共享反馈污染仍未动态复现，不得将推断写成已证实故障。
 
 ### 推荐处理顺序
 

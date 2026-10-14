@@ -31,3 +31,19 @@ README 的示例命令包含 `[retry|ask|continue](可选)`，简单链接正则
 ## jj 模板参数被当作位置参数
 
 jj 0.45.1 在本机执行 `jj log -T '...'` 或 `--template '...'` 时会被解析成 fileset，报 `Failed to parse fileset: Syntax error`。改用默认 `jj log` 输出即可，不据此判断仓库状态损坏。
+
+## 拆包时丢掉模块级导入
+
+阶段 4 生成 `api/answer/core.py` 时漏掉了 `from re import sub` 与 `from api.answer.cache import CacheDAO`，而正文同时保留 `sub(...)`、`CacheDAO()`：题库启用时查询第一步就抛 `NameError`。旧回归只测注册表与实例状态，「各类 AST 与迁移前相同」的比对不覆盖模块级导入，所以两边都没拦住。用 `symtable` 走一遍即可发现函数内引用、模块里却没定义的全局名：
+
+```python
+import symtable
+table = symtable.symtable(open(path, encoding="utf8").read(), path, "exec")
+defined = set(table.get_identifiers())  # 再并入各函数内 global 赋值过的名字
+```
+
+搬迁模块后要补一条真正走调用路径的回归（如 `tests/test_answer_query.py`），只比对类体不够。
+
+## 探针残留缓存让结论失真
+
+`CacheDAO` 默认把 `cache.json` 写在当前工作目录；复跑离线探针时不换目录或清理，上一轮写入的答案会被命中，单题查询看起来「返回了答案」，会把真实缺陷掩盖掉。每次探针都换成干净目录，并确认没有 `cache.json` 残留。

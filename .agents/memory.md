@@ -6,6 +6,7 @@
 - 通用规则真源：个人工作流 `global/AGENTS.md`，不在本仓库复制；本机位置及自检命令见项目工作流文档。
 - Python 版本约束和安装入口见 `pyproject.toml`；运行依赖来自 `requirements.txt`。测试使用 `unittest`。
 - CLI 已分离为 `chaoxing_app/config.py`、`cli.py`、`jobs.py`，`main.py` 为薄入口；`api/` 已实施施工方案阶段 2-4（`api/answer.py` 已拆为 `api/answer/` 包），会话、视频、测验与签到仍集中在 `api/base.py`（复核时 1528 行，`study_video` 在 `:758`、`study_work` 在 `:898`）。
+- 题库查询管道的回归在 `tests/test_answer_query.py`；其中两条仍待授权修复的缺陷以 `expectedFailure` 标记，修复后必须移除标记。
 
 ## 版本控制
 
@@ -30,8 +31,10 @@
 - 阶段 2-4 的离线回归为 103 项通过；源码、模块与安装命令帮助通过；`uv build` 成功且 wheel 含 `api/answer` 子包；wheel 在仓库外目录解包后 `chaoxing_app --help` 与题库装配 smoke 通过。
 - 上述离线结果与 API 只读探针都不覆盖真实登录、题库服务、验证码、直播、作答提交与 Docker/Windows 打包。
 - 复核（阶段 2-4 完成后）：按 LF 归一化工作树后重跑离线回归仍为 103 项通过；`jj status` 干净、`@` 为空提交；本次只读取代码与文档，未编辑业务代码。
-- API 只读探针复现 Session 重建及单题查询丢答案；原始输出与推断边界见施工方案。
-
+- API 只读探针复现 Session 重建、单题查询丢答案与反馈分支未绑定 `cache_dao`；原始输出与推断边界见施工方案。
+- 复核发现阶段 4 拆包引入回归：`api/answer/core.py` 缺 `sub` 与 `CacheDAO` 两个导入，题库启用时 `query`/`query_all` 抛 `NameError`，经 `jobs.py` 线程包装会中断整个学习流程。已在 change `qvpsutuu` 修复，并新增 `tests/test_answer_query.py` 覆盖查询管道；离线回归变为 110 项通过（含 2 项 `expectedFailure`）。
+- 并发探针复现缓存跨实例丢更新：两个 `CacheDAO` 实例各写 200 条，落盘 6 条、丢 394 条，并伴随 `WinError 5`/`Permission denied`；该结论已从推断升级为已复现。
+- 测试盲区（教训）：旧 103 项回归覆盖注册表与实例状态，从未调用 `query`/`query_all`；「`api/answer/` 各类 AST 与迁移前相同」的比对不含模块级导入，因此缺导入既没被测试也没被等价比对发现。
 ## 工作流迁移验证
 
 - 真源 `check-agents.sh` 检查六份规则与导航文件通过，未发现事实与现状混入。
