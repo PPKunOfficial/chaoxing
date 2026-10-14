@@ -35,6 +35,7 @@ def decode_course_list(html_text: str) -> List[Dict[str, str]]:
         if course.select_one("a.not-open-tip") or course.select_one("div.not-open-tip"):
             continue
 
+        desc_tag = course.select_one("p.margint10")
         course_detail = {
             "id": course.attrs["id"],
             "info": course.attrs["info"],
@@ -43,7 +44,7 @@ def decode_course_list(html_text: str) -> List[Dict[str, str]]:
             "courseId": course.select_one("input.courseId").attrs["value"],
             "cpi": re.findall(r"cpi=(.*?)&", course.select_one("a").attrs["href"])[0],
             "title": course.select_one("span.course-name").attrs["title"],
-            "desc": course.select_one("p.margint10").attrs["title"] if course.select_one("p.margint10") else "",
+            "desc": desc_tag.attrs["title"] if desc_tag else "",
             "teacher": course.select_one("p.color3").attrs["title"]
         }
         course_list.append(course_detail)
@@ -129,18 +130,17 @@ def _extract_points_from_chapter(chapter_unit) -> List[Dict[str, Any]]:
         point_id = re.findall(r"^cur(\d{1,20})$", point.attrs["id"])[0]
         point_title = point.select_one("a.clicktitle").text.replace("\n", "").strip()
 
-        # 提取任务数量
-        job_count = 1  # 默认为1
-        need_unlock = False
-        if point.select_one("input.knowledgeJobCount"):
-            job_count = point.select_one("input.knowledgeJobCount").attrs["value"]
-        elif point.select_one("span.bntHoverTips") and "解锁" in point.select_one("span.bntHoverTips").text:
-            need_unlock = True
+        # 同一节点只查询一次: 任务数量标记与提示文案分别缓存
+        job_count_tag = point.select_one("input.knowledgeJobCount")
+        tips_tag = point.select_one("span.bntHoverTips")
+        tips_text = tips_tag.text if tips_tag else ""
+
+        # 提取任务数量: 有任务数标记时取其 value, 否则按提示文案判断是否待解锁
+        job_count = job_count_tag.attrs["value"] if job_count_tag else 1
+        need_unlock = not job_count_tag and "解锁" in tips_text
 
         # 判断是否已完成
-        is_finished = False
-        if point.select_one("span.bntHoverTips") and "已完成" in point.select_one("span.bntHoverTips").text:
-            is_finished = True
+        is_finished = "已完成" in tips_text
 
         point_detail = {
             "id": point_id,
@@ -244,6 +244,8 @@ def _process_attachment_cards(cards: List[Dict[str, Any]]) -> List[Dict[str, Any
 
         # 一开始就把超星api的屎山处理掉，不要用一个屎山行为掩盖另一个屎山 (指根据otherInfo中是否有courseId决定url拼接方式😂)
         # 清理otherInfo字段中的无效参数，这里优化了一下(保留了作者原来的注释TAT）
+        # 仍在原地裁剪 card 的 otherInfo: 后续 _process_*_task 读取的就是裁剪后的值。
+        # 取消这处原地修改属于独立的行为变更, 不在本次等价搬迁中处理。
         if "otherInfo" in card:
             logger.trace("Fixing other info...")
             card["otherInfo"] = card["otherInfo"].split("&")[0]
@@ -541,3 +543,99 @@ def _extract_choices(element, font_decoder=None) -> str:
         cleaned_content = cleaned_content[:-2].rstrip()
 
     return cleaned_content
+# ==================== 章节检测（测验）作答记录解析 ====================
+
+
+def parse_work_record_list(html_text: str) -> List[Tuple[int, float]]:
+    """
+    解析章节检测作答记录列表页面（/work/record-list）。
+
+    Args:
+        html_text: record-list 页面 HTML
+
+    Returns:
+        作答记录列表，元素为 (作答序号times, 成绩score)，例如 [(0, 80.0), (1, 100.0)]
+    """
+    times_list = re.findall(r'viewNum">第(\d+)次', html_text)
+    scores = re.findall(r'viewScore">([\d.]+)分', html_text)
+    if len(times_list) != len(scores):
+        # 次数/成绩数量不齐时 zip 会错位, 成绩按 0 处理(放弃分数捷径, 仅做逐题比对)
+        logger.warning(f"作答记录次数/成绩数量不匹配({len(times_list)}/{len(scores)}), 成绩按0处理")
+        scores = ['0'] * len(times_list)
+
+    records = []
+    for t, s in zip(times_list, scores):
+        try:
+            records.append((int(t), float(s)))
+        except ValueError:
+            continue
+    return records
+
+
+def parse_work_record_detail(html_text: str) -> List[Dict[str, Any]]:
+    """
+    解析章节检测单次作答详情页面（/work/record-detail）。
+
+    Args:
+        html_text: record-detail 页面 HTML
+
+    Returns:
+        每题信息列表：{id, title, type_label, my_answer, correct_answer, parse_ok}
+    """
+    questions = []
+    for qm in re.finditer(
+            r'<div class="TiMu[^"]*singleQuesId" data="(\d+)"[^>]*>(.*?)(?=<div class="TiMu|$)',
+            html_text, re.S):
+        qid = qm.group(1)
+        qb = qm.group(2)
+
+        # 题型 + 题目
+        tm = re.search(r'newZy_TItle">(.*?)</span>(.*?)</div>', qb, re.S)
+        if tm:
+            type_label = re.sub(r'<[^>]+>', '', tm.group(1)).strip()
+            title = re.sub(r'<[^>]+>', '', tm.group(2))
+        else:
+            type_label = ""
+            title = ""
+        title = re.sub(r'\s+', ' ', title).strip()
+
+        # 我的答案/正确答案: 多模式匹配, 兼容属性顺序变化与额外 class 的页面变体
+        ans_patterns = [
+            r'{label}[:：]</span>\s*<div class="fl answerCon">\s*(.*?)\s*</div>',
+            r'{label}[:：]\s*</span>\s*<div[^>]*class="[^"]*answerCon[^"]*"[^>]*>\s*(.*?)\s*</div>',
+            r'{label}[:：]\s*</span>\s*<span[^>]*>\s*(.*?)\s*</span>',
+        ]
+
+        def _extract_answer(label):
+            for pat in ans_patterns:
+                m = re.search(pat.format(label=label), qb, re.S)
+                if m:
+                    return re.sub(r'<[^>]+>', '', m.group(1)).strip()
+            return None
+
+        my_raw = _extract_answer('我的答案')
+        correct_raw = _extract_answer('正确答案')
+
+        questions.append({
+            "id": qid,
+            "title": title,
+            "type_label": type_label,
+            "my_answer": my_raw or '',
+            "correct_answer": correct_raw or '',
+            "parse_ok": my_raw is not None and correct_raw is not None,
+        })
+    return questions
+
+
+def parse_work_score(html_text: str) -> float:
+    """
+    解析章节检测结果页面上的本次成绩。
+
+    Args:
+        html_text: 提交后的结果页面 HTML
+
+    Returns:
+        成绩分数；页面未给出成绩时返回 0.0
+    """
+    match = re.search(r'本次成绩<i>([\d.]+)</i>分', html_text)
+    return float(match.group(1)) if match else 0.0

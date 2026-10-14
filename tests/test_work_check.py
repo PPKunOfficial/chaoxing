@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-"""章节检测判分修复的回归测试: 答案归一化、宽松正则解析与 parse_ok 标记."""
+"""章节检测判分回归测试: 作答记录解析、parse_ok 标记、答案归一化与逐题判分."""
 import unittest
 
-from api.base import _parse_work_record_detail, normalize_answer_text
+from api.answer_check import grade_work_detail, normalize_answer_text
+from api.decode import parse_work_record_detail
 
 
 class NormalizeAnswerTextTest(unittest.TestCase):
@@ -56,7 +57,7 @@ class ParseWorkRecordDetailTest(unittest.TestCase):
         html = _detail_html(
             '<span>我的答案：</span><div class="fl answerCon"> B </div>'
             '<span>正确答案：</span><div class="fl answerCon"> B </div>')
-        qs = _parse_work_record_detail(html)
+        qs = parse_work_record_detail(html)
         self.assertEqual(len(qs), 1)
         self.assertTrue(qs[0]['parse_ok'])
         self.assertEqual(qs[0]['my_answer'], 'B')
@@ -66,7 +67,7 @@ class ParseWorkRecordDetailTest(unittest.TestCase):
         html = _detail_html(
             '<span>我的答案：</span><div class="fl answerCon colorDeep">A</div>'
             '<span>正确答案：</span><div class="fl answerCon colorGreen">B</div>')
-        qs = _parse_work_record_detail(html)
+        qs = parse_work_record_detail(html)
         self.assertTrue(qs[0]['parse_ok'])
         self.assertEqual(qs[0]['my_answer'], 'A')
         self.assertEqual(qs[0]['correct_answer'], 'B')
@@ -76,17 +77,53 @@ class ParseWorkRecordDetailTest(unittest.TestCase):
         html = _detail_html(
             '<span>我的答案：</span><span class="colorRed">true</span>'
             '<span>正确答案：</span><span class="colorGreen">对</span>')
-        qs = _parse_work_record_detail(html)
+        qs = parse_work_record_detail(html)
         self.assertTrue(qs[0]['parse_ok'])
         self.assertEqual(qs[0]['my_answer'], 'true')
 
     def test_missing_answer_marks_unknown(self):
         """任一侧未命中 → parse_ok=False, 避免空串比较误判全错."""
         html = _detail_html('<span>我的答案：</span><div class="fl answerCon">A</div>')
-        qs = _parse_work_record_detail(html)
+        qs = parse_work_record_detail(html)
         self.assertFalse(qs[0]['parse_ok'])
         self.assertEqual(qs[0]['my_answer'], 'A')
         self.assertEqual(qs[0]['correct_answer'], '')
+
+
+class GradeWorkDetailTest(unittest.TestCase):
+    def test_all_correct_passes(self):
+        detail = [{"parse_ok": True, "my_answer": "B", "correct_answer": "B",
+                   "title": "题", "type_label": "单选题"}]
+        all_correct, feedback, unknown = grade_work_detail(detail)
+        self.assertTrue(all_correct)
+        self.assertEqual(feedback, [])
+        self.assertEqual(unknown, 0)
+
+    def test_wrong_answer_produces_feedback(self):
+        detail = [{"parse_ok": True, "my_answer": "A", "correct_answer": "B",
+                   "title": "题", "type_label": "单选题"}]
+        all_correct, feedback, unknown = grade_work_detail(detail)
+        self.assertFalse(all_correct)
+        self.assertEqual(unknown, 0)
+        self.assertEqual(len(feedback), 1)
+        self.assertIn("题目：题", feedback[0])
+        self.assertIn("正确答案：B", feedback[0])
+
+    def test_judgement_variants_are_equal(self):
+        detail = [{"parse_ok": True, "my_answer": "true", "correct_answer": "对",
+                   "title": "", "type_label": ""}]
+        all_correct, _, _ = grade_work_detail(detail)
+        self.assertTrue(all_correct)
+
+    def test_unparsed_answer_counts_as_unknown(self):
+        detail = [{"parse_ok": False, "my_answer": "A", "correct_answer": ""}]
+        all_correct, feedback, unknown = grade_work_detail(detail)
+        self.assertFalse(all_correct)
+        self.assertEqual(feedback, [])
+        self.assertEqual(unknown, 1)
+
+    def test_empty_detail(self):
+        self.assertEqual(grade_work_detail([]), (True, [], 0))
 
 
 if __name__ == '__main__':

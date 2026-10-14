@@ -18,7 +18,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception
 from tqdm import tqdm
 
 from api.answer import Tiku, TikuManual
-from api.answer_check import cut
+from api.answer_check import cut, grade_work_detail
 from api.cipher import AESCipher
 from api.config import GlobalConst as gc
 from api.cookies import save_cookies, use_cookies
@@ -28,6 +28,9 @@ from api.decode import (
     decode_course_card,
     decode_course_folder,
     decode_questions_info,
+    parse_work_record_detail,
+    parse_work_record_list,
+    parse_work_score,
 )
 
 
@@ -277,106 +280,6 @@ def random_answer(options: str, q_type: str) -> str:
         answer = "true" if random.choice([True, False]) else "false"
     logger.info(f"随机选择 -> {answer}")
     return answer
-
-
-def _parse_work_record_list(html_text: str) -> list[tuple[int, float]]:
-    """
-    解析章节检测作答记录列表页面（/work/record-list）。
-
-    Args:
-        html_text: record-list 页面 HTML
-
-    Returns:
-        作答记录列表，元素为 (作答序号times, 成绩score)，例如 [(0, 80.0), (1, 100.0)]
-    """
-    records = []
-    times_list = re.findall(r'viewNum">第(\d+)次', html_text)
-    scores = re.findall(r'viewScore">([\d.]+)分', html_text)
-    if len(times_list) != len(scores):
-        # 次数/成绩数量不齐时 zip 会错位, 成绩按 0 处理(放弃分数捷径, 仅做逐题比对)
-        logger.warning(f"作答记录次数/成绩数量不匹配({len(times_list)}/{len(scores)}), 成绩按0处理")
-        scores = ['0'] * len(times_list)
-    for t, s in zip(times_list, scores):
-        try:
-            records.append((int(t), float(s)))
-        except ValueError:
-            continue
-    return records
-
-
-def _parse_work_record_detail(html_text: str) -> list[dict]:
-    """
-    解析章节检测单次作答详情页面（/work/record-detail）。
-
-    Args:
-        html_text: record-detail 页面 HTML
-
-    Returns:
-        每题信息列表：{id, title, type_label, my_answer, correct_answer}
-    """
-    questions = []
-    for qm in re.finditer(r'<div class="TiMu[^"]*singleQuesId" data="(\d+)"[^>]*>(.*?)(?=<div class="TiMu|$)', html_text, re.S):
-        qid = qm.group(1)
-        qb = qm.group(2)
-
-        # 题型 + 题目
-        tm = re.search(r'newZy_TItle">(.*?)</span>(.*?)</div>', qb, re.S)
-        if tm:
-            type_label = re.sub(r'<[^>]+>', '', tm.group(1)).strip()
-            title = re.sub(r'<[^>]+>', '', tm.group(2))
-        else:
-            type_label = ""
-            title = ""
-        title = re.sub(r'\s+', ' ', title).strip()
-
-        # 我的答案/正确答案: 多模式匹配, 兼容属性顺序变化与额外 class 的页面变体
-        ans_patterns = [
-            r'{label}[:：]</span>\s*<div class="fl answerCon">\s*(.*?)\s*</div>',
-            r'{label}[:：]\s*</span>\s*<div[^>]*class="[^"]*answerCon[^"]*"[^>]*>\s*(.*?)\s*</div>',
-            r'{label}[:：]\s*</span>\s*<span[^>]*>\s*(.*?)\s*</span>',
-        ]
-
-        def _extract_answer(label):
-            for pat in ans_patterns:
-                m = re.search(pat.format(label=label), qb, re.S)
-                if m:
-                    return re.sub(r'<[^>]+>', '', m.group(1)).strip()
-            return None
-
-        my_raw = _extract_answer('我的答案')
-        correct_raw = _extract_answer('正确答案')
-
-        questions.append({
-            "id": qid,
-            "title": title,
-            "type_label": type_label,
-            "my_answer": my_raw or '',
-            "correct_answer": correct_raw or '',
-            "parse_ok": my_raw is not None and correct_raw is not None,
-        })
-    return questions
-
-
-_JUDGE_TRUE_SET = {'TRUE', 'T', '1', '对', '正确', '√', '是', 'YES', 'Y'}
-_JUDGE_FALSE_SET = {'FALSE', 'F', '0', '错', '错误', '×', 'X', '否', 'NO', 'N', '不对', '不正确'}
-
-
-def normalize_answer_text(ans) -> str:
-    """作答详情答案归一化: 消除 对/错与true/false、全半角标点等格式差异.
-
-    归一化是确定性的, 两侧同格式必然相等; 跨格式差异(如字母 vs 选项全文)
-    交由调用方的满分分数兜底处理.
-    """
-    s = re.sub(r'\s+', '', str(ans or '')).upper()
-    if s in _JUDGE_TRUE_SET:
-        return 'TRUE'
-    if s in _JUDGE_FALSE_SET:
-        return 'FALSE'
-    if re.fullmatch(r'[A-Z0-9]+', s):
-        return s
-    s = re.sub(r'^[A-Z][.、:：)?）]', '', s)
-    s = re.sub(r'[，。、！？；：,.!?;:()（）\[\]【】"“”‘’\-_/\\|]', '', s)
-    return s
 
 
 class Chaoxing:
@@ -1322,7 +1225,7 @@ class Chaoxing:
                     },
                     timeout=20,
                 )
-                records = _parse_work_record_list(resp.text)
+                records = parse_work_record_list(resp.text)
                 if records:
                     break
             except Exception as e:
@@ -1367,32 +1270,13 @@ class Chaoxing:
                     }
                 elif '正确答案' in html and '我的答案' in html:
                     # 已提交详情页：解析成绩与对错
-                    detail = _parse_work_record_detail(html)
+                    detail = parse_work_record_detail(html)
                     if detail:
-                        feedback = []
-                        all_correct = True
-                        unknown = 0
-                        for q in detail:
-                            if not q.get("parse_ok", True):
-                                unknown += 1
-                                all_correct = False
-                                continue
-                            my_ans = (q.get("my_answer") or "").strip()
-                            correct_ans = (q.get("correct_answer") or "").strip()
-                            if normalize_answer_text(my_ans) != normalize_answer_text(correct_ans):
-                                all_correct = False
-                                feedback.append(
-                                    f"- 题目：{q.get('title', '')}\n"
-                                    f"  题型：{q.get('type_label', '')}\n"
-                                    f"  你的上次答案：{my_ans or '(空)'}\n"
-                                    f"  正确答案：{correct_ans or '(空)'}"
-                                )
-                        m = re.search(r'本次成绩<i>([\d.]+)</i>分', html)
-                        score = float(m.group(1)) if m else 0.0
+                        all_correct, feedback, unknown = grade_work_detail(detail)
                         return {
                             "all_correct": all_correct,
                             "feedback": feedback,
-                            "score": score,
+                            "score": parse_work_score(html),
                             "times": 0,
                             "unknown": unknown,
                         }
@@ -1426,7 +1310,7 @@ class Chaoxing:
                 },
                 timeout=20,
             )
-            detail = _parse_work_record_detail(resp.text)
+            detail = parse_work_record_detail(resp.text)
         except Exception as e:
             logger.warning(f"获取章节检测作答详情失败: {e}")
             return None
@@ -1436,24 +1320,7 @@ class Chaoxing:
             return None
 
         # 3. 逐题判断对错，收集错误反馈（解析失配的题跳过并计数, 避免误判全错）
-        feedback = []
-        all_correct = True
-        unknown = 0
-        for q in detail:
-            if not q.get("parse_ok", True):
-                unknown += 1
-                all_correct = False
-                continue
-            my_ans = (q.get("my_answer") or "").strip()
-            correct_ans = (q.get("correct_answer") or "").strip()
-            if normalize_answer_text(my_ans) != normalize_answer_text(correct_ans):
-                all_correct = False
-                feedback.append(
-                    f"- 题目：{q.get('title', '')}\n"
-                    f"  题型：{q.get('type_label', '')}\n"
-                    f"  你的上次答案：{my_ans or '(空)'}\n"
-                    f"  正确答案：{correct_ans or '(空)'}"
-                )
+        all_correct, feedback, unknown = grade_work_detail(detail)
 
         logger.debug(f"章节检测成绩: {latest_score} 分, 全部正确: {all_correct}, 错题数: {len(feedback)}, 未解析题数: {unknown}")
         return {
