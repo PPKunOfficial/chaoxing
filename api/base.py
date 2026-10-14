@@ -8,8 +8,7 @@ import time
 from difflib import SequenceMatcher
 from enum import Enum, IntEnum
 from hashlib import md5
-from typing import Optional, Literal
-from typing_extensions import Self
+from typing import Optional, Literal, Self
 
 import requests
 from loguru import logger

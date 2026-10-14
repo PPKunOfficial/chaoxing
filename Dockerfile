@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY . /app
 
-RUN pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+RUN pip install . -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 # 创建配置文件目录并提供默认配置
 RUN mkdir -p /config && \
@@ -14,4 +14,4 @@ RUN mkdir -p /config && \
 VOLUME /config
 
 # 使用配置文件启动应用
-ENTRYPOINT ["python3", "main.py", "-c", "/config/config.ini"]
+ENTRYPOINT ["chaoxing", "-c", "/config/config.ini"]

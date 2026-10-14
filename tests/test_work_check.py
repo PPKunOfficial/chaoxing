@@ -1,12 +1,8 @@
 # -*- coding: utf-8 -*-
 """章节检测判分修复的回归测试: 答案归一化、宽松正则解析与 parse_ok 标记."""
-import os
-import sys
 import unittest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from api.base import _parse_work_record_detail, normalize_answer_text  # noqa: E402
+from api.base import _parse_work_record_detail, normalize_answer_text
 
 
 class NormalizeAnswerTextTest(unittest.TestCase):
@@ -38,7 +34,6 @@ class NormalizeAnswerTextTest(unittest.TestCase):
 
     def test_same_format_multi_choice(self):
         """同格式的多选答案归一后必然相等(跨格式差异由分数兜底, 见方案 F2 局限)."""
-        self.assertEqual(normalize_answer_text('A、B、C'), normalize_answer_text('A、B、C'))
         self.assertEqual(normalize_answer_text('A,B,C'), normalize_answer_text('ABC'))
 
     def test_empty_and_none(self):

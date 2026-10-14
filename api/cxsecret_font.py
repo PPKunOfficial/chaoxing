@@ -7,7 +7,6 @@
 import base64
 import hashlib
 import json
-import os
 import sys
 from io import BytesIO
 from pathlib import Path
@@ -38,14 +37,8 @@ def resource_path(relative_path: str) -> str:
     Returns:
         资源文件的绝对路径
     """
-    try:
-        # PyInstaller创建临时文件夹，定位路径
-        base_path = sys._MEIPASS
-    except Exception:
-        # 非打包环境，使用当前目录
-        base_path = os.path.abspath(".")
-
-    return os.path.join(base_path, relative_path)
+    base_path = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
+    return str(base_path / relative_path)
 
 
 class FontHashDAO:

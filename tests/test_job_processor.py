@@ -1,20 +1,16 @@
 # -*- coding: utf-8 -*-
-"""Issue #612 的回归测试：未开放章节不再无限重试."""
-import os
-import sys
+"""章节重试、队列生命周期及异常传播的无网络回归测试。"""
 import threading
 import unittest
+from unittest.mock import patch
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-import main  # noqa: E402
+from chaoxing_app import jobs as main
 
 
 class DummyChaoxing:
-    """仅提供 process_chapter 所需的最小接口，不发任何网络请求."""
+    """仅提供 process_chapter 所需的最小接口，不发任何网络请求。"""
 
     def __init__(self, job_info):
-        """初始化测试替身，保存固定的任务点数据."""
         self.job_info = job_info
         self.rate_limiter = _NoopRateLimiter()
 
@@ -29,7 +25,7 @@ class _NoopRateLimiter:
 
 class JobProcessorTestCase(unittest.TestCase):
     def setUp(self):
-        main.logger.remove()  # 关闭所有 handler，避免测试日志刷屏
+        main.logger.remove()
 
     def _make_processor(self, job_info, notopen_action="retry", max_tries=3):
         course = {"title": "课程"}
@@ -46,23 +42,26 @@ class JobProcessorTestCase(unittest.TestCase):
         return processor, task
 
     def _run_with_timeout(self, processor, timeout=5.0):
-        """在独立线程中运行 run()，超时抛出异常，避免旧代码无限重试导致测试永久卡死."""
+        """对死锁给出有限等待，并在调用线程重新抛出 run 的异常。"""
         exception = {}
 
         def target():
             try:
                 processor.run()
-            except BaseException as exc:  # noqa: BLE001 - 子线程异常需在主线程重新抛出
+            except BaseException as exc:
                 exception["exc"] = exc
 
-        thread = threading.Thread(target=target)
-        thread.daemon = True
+        thread = threading.Thread(target=target, daemon=True)
         thread.start()
         thread.join(timeout)
-        if thread.is_alive():
-            self.fail(
-                f"JobProcessor.run() 超过 {timeout}s 未返回，疑似无限重试（Issue #612）"
-            )
+        self.assertFalse(thread.is_alive(), f"JobProcessor.run() 超过 {timeout}s 未返回")
+        for worker in processor.threads:
+            self.assertFalse(worker.is_alive(), worker.name)
+            self.assertFalse(worker.daemon, worker.name)
+        for queue in (processor.task_queue, processor.retry_queue):
+            self.assertTrue(queue.is_shutdown)
+            self.assertTrue(queue.empty())
+            self.assertEqual(queue.unfinished_tasks, 0)
         if exception:
             raise exception["exc"]
 
@@ -70,61 +69,99 @@ class JobProcessorTestCase(unittest.TestCase):
         return {"jobs": [], "job_info": {"notOpen": True}}
 
     def _error_job_info(self):
-        # 未知任务类型会走 ERROR 分支，不依赖网络。
         return {"jobs": [{"type": "unknown"}], "job_info": {}}
 
-    def test_not_open_does_not_retry_forever(self):
-        processor, _ = self._make_processor(self._not_open_job_info(), max_tries=3)
-        self._run_with_timeout(processor)
-
-    def test_not_open_tries_increment(self):
-        processor, task = self._make_processor(self._not_open_job_info(), max_tries=3)
-        self._run_with_timeout(processor)
-        self.assertEqual(task.tries, 3)
-
     def test_not_open_stops_after_max_tries(self):
-        processor, task = self._make_processor(self._not_open_job_info(), max_tries=3)
+        processor, task = self._make_processor(self._not_open_job_info())
         self._run_with_timeout(processor)
         self.assertEqual(task.tries, 3)
-        self.assertTrue(processor.task_queue.empty())
-        self.assertTrue(processor.retry_queue.empty())
-        self.assertEqual(processor.task_queue.unfinished_tasks, 0)
-
-    def test_not_open_queue_joins_normally(self):
-        for _ in range(3):
-            processor, _ = self._make_processor(self._not_open_job_info(), max_tries=3)
-            self._run_with_timeout(processor)
+        self.assertEqual(task.result, main.ChapterResult.NOT_OPEN)
+        self.assertEqual(processor.failed_tasks, [])
 
     def test_not_open_continue_skips_without_retry(self):
         processor, task = self._make_processor(
-            self._not_open_job_info(), notopen_action="continue", max_tries=3
+            self._not_open_job_info(), notopen_action="continue"
         )
         self._run_with_timeout(processor)
         self.assertEqual(task.tries, 0)
-        self.assertTrue(processor.retry_queue.empty())
+        self.assertEqual(task.result, main.ChapterResult.NOT_OPEN)
+        self.assertEqual(processor.failed_tasks, [])
 
     def test_error_retry_behavior_unchanged(self):
-        processor, task = self._make_processor(self._error_job_info(), max_tries=3)
+        processor, task = self._make_processor(self._error_job_info(), max_tries=5)
         self._run_with_timeout(processor)
-        self.assertEqual(task.tries, 3)
-        self.assertIn(task, processor.failed_tasks)
+        self.assertEqual(task.tries, 5)
+        self.assertEqual(task.result, main.ChapterResult.ERROR)
+        self.assertEqual(processor.failed_tasks, [task])
 
-    def test_success_does_not_retry(self):
-        # 已完成章节直接 SUCCESS，不应有任何重试。
-        course = {"title": "课程"}
-        point = {"title": "章节", "has_finished": True}
-        task = main.ChapterTask(index=0, point=point, course=course)
-        config = {
-            "speed": 1.0,
-            "jobs": 1,
-            "notopen_action": "retry",
-            "retry_interval": 0.01,
-        }
-        processor = main.JobProcessor(DummyChaoxing(self._not_open_job_info()), [task], config)
-        processor.max_tries = 3
+    def test_success_does_not_retry_and_stops_idle_retry_thread(self):
+        processor, task = self._make_processor(self._not_open_job_info())
+        task.point["has_finished"] = True
         self._run_with_timeout(processor)
         self.assertEqual(task.tries, 0)
-        self.assertTrue(processor.retry_queue.empty())
+        self.assertEqual(task.result, main.ChapterResult.SUCCESS)
+
+    def test_completion_interrupts_retry_interval(self):
+        processor, task = self._make_processor(self._error_job_info(), max_tries=2)
+        processor.retry_interval = 60
+        self._run_with_timeout(processor)
+        self.assertEqual(task.tries, 2)
+        self.assertEqual(processor.failed_tasks, [task])
+
+    def test_worker_exception_propagates_with_pending_tasks(self):
+        for error in (RuntimeError("worker failed"), SystemExit("worker exited")):
+            with self.subTest(error=type(error).__name__):
+                processor, task = self._make_processor(self._not_open_job_info())
+                processor.tasks.extend(
+                    main.ChapterTask(index=index, point=dict(task.point), course=task.course)
+                    for index in range(1, 4)
+                )
+                with patch.object(main, "process_chapter", side_effect=error):
+                    with self.assertRaises(type(error)) as caught:
+                        self._run_with_timeout(processor)
+                self.assertIs(caught.exception, error)
+                self.assertEqual(task.tries, 0)
+                self.assertEqual(processor.failed_tasks, [])
+
+    def test_retry_thread_exception_propagates(self):
+        processor, _ = self._make_processor(self._error_job_info())
+        error = RuntimeError("retry failed")
+        with patch.object(processor, "retry_thread", side_effect=error):
+            with self.assertRaises(RuntimeError) as caught:
+                self._run_with_timeout(processor)
+        self.assertIs(caught.exception, error)
+
+    def test_empty_tasks_stop_all_threads(self):
+        processor, _ = self._make_processor(self._not_open_job_info())
+        processor.tasks.clear()
+        self._run_with_timeout(processor)
+        self.assertEqual(processor.failed_tasks, [])
+
+    def test_default_workers_do_not_mutate_config(self):
+        for jobs in (None, 0):
+            with self.subTest(jobs=jobs):
+                config = {"speed": 1.0, "notopen_action": "retry"}
+                if jobs == 0:
+                    config["jobs"] = jobs
+                original = dict(config)
+                processor = main.JobProcessor(DummyChaoxing(self._not_open_job_info()), [], config)
+                self._run_with_timeout(processor)
+                self.assertEqual(config, original)
+
+    def test_chapter_executes_every_job_before_reporting_failure(self):
+        jobs = [{"type": "document", "jobid": "first"}, {"type": "read", "jobid": "second"}]
+        processor, task = self._make_processor({"jobs": jobs, "job_info": {}})
+        with patch.object(main, "process_job", side_effect=[main.StudyResult.ERROR, main.StudyResult.SUCCESS]) as process:
+            result = main.process_chapter(processor.chaoxing, task.course, task.point, processor.speed)
+        self.assertEqual(result, main.ChapterResult.ERROR)
+        self.assertEqual(process.call_count, 2)
+        self.assertEqual([call.args[2] for call in process.call_args_list], jobs)
+
+    def test_chapter_without_jobs_succeeds(self):
+        processor, task = self._make_processor({"jobs": [], "job_info": {}})
+        self._run_with_timeout(processor)
+        self.assertEqual(task.result, main.ChapterResult.SUCCESS)
+        self.assertEqual(task.tries, 0)
 
 
 if __name__ == "__main__":
