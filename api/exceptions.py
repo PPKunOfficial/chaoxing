@@ -1,29 +1,25 @@
-try:
-    from requests.exceptions import JSONDecodeError
-except ImportError:
-    from json import JSONDecodeError
+# -*- coding: utf-8 -*-
+"""领域异常。
+
+各异常不额外定义构造器：调用方只依赖消息与类型，父类行为已足够。
+"""
 
 
 class LoginError(Exception):
-    def __init__(self, *args: object):
-        super().__init__(*args)
+    """登录失败。"""
 
 
 class InputFormatError(Exception):
-    def __init__(self, *args: object):
-        super().__init__(*args)
+    """用户输入格式不合法。"""
 
 
 class MaxRollBackExceeded(Exception):
-    def __init__(self, *args: object):
-        super().__init__(*args)
+    """测验重做次数超过上限。"""
 
 
 class MaxRetryExceeded(Exception):
-    def __init__(self, *args: object):
-        super().__init__(*args)
+    """请求或任务重试次数超过上限。"""
 
 
 class FontDecodeError(Exception):
-    def __init__(self, *args: object):
-        super().__init__(*args)
+    """字体映射缺失或解码失败。"""

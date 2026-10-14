@@ -1,4 +1,8 @@
 # -*- coding:utf-8 -*-
+"""登录使用的 AES-CBC 加密。
+
+只整理字节聚合方式，分组、填充与 base64 文本形态保持协议要求不变。
+"""
 import base64
 
 import pyaes
@@ -35,15 +39,12 @@ class AESCipher:
         self.key = str(gc.AESKey).encode("utf8")
         self.iv = str(gc.AESKey).encode("utf8")
 
-    def encrypt(self, plaintext: str):
-        ciphertext = b""
+    def encrypt(self, plaintext: str) -> str:
         cbc = pyaes.AESModeOfOperationCBC(self.key, self.iv)
-        plaintext = plaintext.encode("utf-8")
-        blocks = split_to_data_blocks(pkcs7_padding(plaintext))
-        for b in blocks:
-            ciphertext = ciphertext + cbc.encrypt(b)
-        base64_text = base64.b64encode(ciphertext).decode("utf8")
-        return base64_text
+        blocks = split_to_data_blocks(pkcs7_padding(plaintext.encode("utf-8")))
+        # CBC 逐块顺序加密，聚合结果与逐次拼接的 bytes 完全一致。
+        ciphertext = b"".join(cbc.encrypt(block) for block in blocks)
+        return base64.b64encode(ciphertext).decode("utf8")
 
     # def decrypt(self, ciphertext: str):
     #     cbc = pyaes.AESModeOfOperationCBC(self.key, self.iv)

@@ -1,3 +1,33 @@
+"""纯答案规则：校验、切分与归一化。
+
+`cut` 的分隔符顺序是行为契约: 按 `CUT_CHARACTERS` 的固定顺序取首个能在答案中
+切出内容的字符, 不能替换为同时匹配全部分隔符的正则。
+"""
+
+# 切分优先级: 顺序即优先级, 调整顺序会改变已命中的切分结果。
+CUT_CHARACTERS = [
+    "\n",
+    ",",
+    "，",
+    "|",
+    "\r",
+    "\t",
+    "#",
+    "*",
+    "-",
+    "_",
+    "+",
+    "@",
+    "~",
+    "/",
+    "\\",
+    ".",
+    "&",
+    " ",
+    "、",
+]
+
+
 def check_single(answer):
     if answer is None:
         return False
@@ -36,10 +66,7 @@ def check_judgement(answer, true_list, false_list):
 
 
 def check_completion(answer):
-    if len(answer) > 0:
-        return True
-    else:
-        return False
+    return len(answer) > 0
 
 
 def check_answer(answer, type, tiku):  # 只会写小杯代码，这里用个tiku感觉怪怪的，但先这么写着
@@ -66,32 +93,11 @@ def check_answer(answer, type, tiku):  # 只会写小杯代码，这里用个tik
 
 
 def cut(answer):
-    cut_char = [
-        "\n",
-        ",",
-        "，",
-        "|",
-        "\r",
-        "\t",
-        "#",
-        "*",
-        "-",
-        "_",
-        "+",
-        "@",
-        "~",
-        "/",
-        "\\",
-        ".",
-        "&",
-        " ",
-        "、",
-    ]
     if answer is None:
         return None
 
     answer = str(answer)
-    for char in cut_char:
+    for char in CUT_CHARACTERS:
         if char not in answer:
             continue
         res = [opt.strip() for opt in answer.split(char) if opt.strip()]

@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+"""Cookie 文件读写。
+
+持久化格式为 `name=value;name=value`：value 中允许出现 `=`，解析时只按首个
+`=` 切分，因此编码与解码必须成对保持该文本协议。
+"""
 import os.path
 import threading
 
@@ -10,12 +15,9 @@ from api.config import GlobalConst as gc
 cookie_lock = threading.RLock()
 
 
-def save_cookies(session: requests.Session):
+def save_cookies(session: requests.Session) -> None:
     with cookie_lock:
-        buffer = ""
-        for k, v in session.cookies.items():
-            buffer += f"{k}={v};"
-        buffer = buffer.removesuffix(";")
+        buffer = ";".join(f"{k}={v}" for k, v in session.cookies.items())
         with open(gc.COOKIES_PATH, "w") as f:
             f.write(buffer)
 
