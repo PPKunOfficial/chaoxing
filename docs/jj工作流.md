@@ -16,6 +16,8 @@ jj git init --colocate
 jj bookmark track main@origin
 ```
 
+`.jj/` 不随 `git clone` 复制：重新克隆的目录只有 `.git/`，需要按上面的步骤重新 colocate。Windows 上若 git 全局配置 `core.autocrlf=true`，克隆出的工作树是 CRLF 而仓库内容按 LF 存储，colocate 后 `jj status` 会把全部文件报成已修改——这是换行归一化差异，不是真实改动；在本仓库执行 `git config core.autocrlf false`，让工作树按 LF 落盘后再运行 `jj status`。
+
 ## 日常提交
 
 Jujutsu 自动记录工作区，不需要 `git add` 或 `git commit`。一次 change 一件事，提交信息采用 gitmoji + 约定式提交 + 中文：
