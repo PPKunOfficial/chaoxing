@@ -10,10 +10,12 @@
 - [x] 第四节缺陷修复，每项一个独立 change，行为差异先记入施工方案「修复契约」，结果见同文「修复实施结果」：查询管道 `qwknwrqv`、缓存并发 `lwnnruto`、Session `kvqxommw`、重做计数 `oxzzmolx`、直播失败 `upsmutkl`、判空顺序 `puwoqtnv`；验收：新增 `test_answer_query.py`、`test_answer_cache.py`、`test_session.py`、`test_work_state.py` 与直播失败两例，离线回归 128 项通过，修复后离线探针逐项确认。
 - [ ] 线上验收（需授权与可控测试课程）：直播失败章节重试的连带重跑、测验保存/提交与覆盖率门槛、Cookie 失效重新登录。本轮仅验证本地表单和返回语义，不证明服务端接受请求或确认任务点完成。
 - [ ] 待定：共享 Session 被 4 个 worker 线程并发使用时的线程模型（线程隔离、加锁或维持现状）；验收：先给出并发契约与复现证据，再改代码。
+- [x] 简易缺陷修复：缓存根节点不是 JSON 对象（`[1]`/`123`/`null`）不再抛 `AttributeError`，按内容损坏备份原文件并按空缓存继续、可正常重建；`notopen_action=ask` 增加启动 warning（行为仍与 retry 一致）。验收：新增 `test_non_object_json_is_treated_as_corrupt_without_raising` 与两条 ask/retry 提示回归，完整回归 153 项通过。
+- [ ] 其余剩余缺陷见 `.agents/api重构施工方案.md`「剩余缺陷修整方案」：`TikuFallback` 反馈链感知、`run_live()` 全失败判定与重试粒度、共享 Session 线程模型、`_LOCKS` 生命周期与跨进程；均需先定契约或授权后再动代码。
 
 ## 文档中已明确的实现差异
 
-- [ ] 是否实现真正的 `notopen_action=ask` 由后续需求决定；验收：用户授权行为变化后，实际 CLI 询问与取消/继续分支经过交互验证。迁移工作流不实现此功能。
+- [ ] 是否实现真正的 `notopen_action=ask` 由后续需求决定（A 实现询问 / B 明确为 retry 别名 / C 维持现状+warning）；验收：用户授权行为变化后，实际 CLI 询问与取消/继续分支经过交互验证。当前仅增加启动提示，行为未变。
 
 ## 决策与授权边界
 

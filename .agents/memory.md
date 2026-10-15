@@ -54,3 +54,11 @@
 - wheel 通过 `uv pip install --target <scratch>` 安装，复用已安装的项目依赖；仓库外确认业务模块来自 wheel、测试/样本来自 sdist，运行新增 22 项流程、字体资源加载及模块/安装命令帮助均通过。这不是全新环境依赖安装或 Windows/Docker 验收。
 - 真源 `check-agents.sh` 六文件检查通过；本轮没有修改 `process.py`、Session 线程模型或平台协议策略，没有执行真实登录、提交、签到、进度上报或学习次数增加。
 - 验证日志与包在 session scratch：`contracts-baseline.log`、`gate-a-tests.log`、`final-tests.log`、`build-final.log`、`wheel-smoke-final.log`、`sdist-tests-final.log`、`dist-final/`。宿主生成的批准计划保留在工作区，不纳入上述工程 change。
+
+## 简易缺陷修复与剩余项
+
+- 缓存根节点不是 JSON 对象（`[1]`/`"text"`/`123`/`null`）时 `get_cache` 曾抛 `AttributeError`；现于 `_read_cache_once` 校验 `isinstance(data, dict)`，不符合按「内容损坏」备份后按空缓存继续，写入可重建。离线实测：`get_cache -> None`、备份生成、`add_cache` 后文件为 `{'q': 'A'}`。回归 `tests/test_answer_cache.py::test_non_object_json_is_treated_as_corrupt_without_raising`。
+- `notopen_action=ask` 仍在 `JobProcessor.__init__` 记录一条 warning 后与 `retry` 同分支，**行为未变**；`tests/test_job_processor.py` 覆盖 ask 提示一次、retry/continue 不提示。真正询问属行为变更，仍待授权。
+- 完整回归从 150 项增至 **153 项通过**；`check-agents.sh`、Markdown 格式与本地链接、compileall 通过。本轮未执行线上协议、Docker、Windows/PyInstaller 或远端 CI。
+- 剩余缺陷的契约、选项与验证方式已写入 `.agents/api重构施工方案.md`「剩余缺陷修整方案」（TikuFallback 反馈链、`run_live()` 全失败判定与重试粒度、Session 线程模型、`_LOCKS` 生命周期、线上验收、阶段 5 剩余与阶段 6）；未授权前不改代码。
+- 事实修正：本机 `main` 已推送到 `origin/main`（`41234e28`，含 `sumltmns`/`lomtwkyw`/`xskzvptm` 三个 change）。
