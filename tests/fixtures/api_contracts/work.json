@@ -1,0 +1,36 @@
+{
+  "course": {"clazzId": "1001", "courseId": "2001", "cpi": "3001"},
+  "job": {"jobid": "work-5001", "enc": "SYNTHETIC_JOB_ENC"},
+  "job_info": {"knowledgeid": "4001", "ktoken": "SYNTHETIC_KTOKEN", "cpi": "3001"},
+  "fetch_url": "https://mooc1.chaoxing.com/mooc-ans/api/work",
+  "fetch_params": {
+    "api": "1", "workId": "5001", "jobid": "work-5001", "originJobId": "work-5001",
+    "needRedirect": "true", "skipHeader": "true", "knowledgeid": "4001", "ktoken": "SYNTHETIC_KTOKEN",
+    "cpi": "3001", "ut": "s", "clazzId": "1001", "type": "", "enc": "SYNTHETIC_JOB_ENC", "mooc2": "1", "courseid": "2001"
+  },
+  "submit_url": "https://mooc1.chaoxing.com/mooc-ans/work/addStudentWorkNew",
+  "headers": {
+    "Host": "mooc1.chaoxing.com", "sec-ch-ua-platform": "\"Windows\"", "X-Requested-With": "XMLHttpRequest",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36 Edg/129.0.0.0",
+    "Accept": "application/json, text/javascript, */*; q=0.01",
+    "sec-ch-ua": "\"Microsoft Edge\";v=\"129\", \"Not=A?Brand\";v=\"8\", \"Chromium\";v=\"129\"",
+    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8", "sec-ch-ua-mobile": "?0",
+    "Origin": "https://mooc1.chaoxing.com", "Sec-Fetch-Site": "same-origin", "Sec-Fetch-Mode": "cors", "Sec-Fetch-Dest": "empty",
+    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6,ja;q=0.5"
+  },
+  "answers": ["乙", "C\nA", "正确", ["合成", "填空"], "合成简答"],
+  "random_answer": "SYNTHETIC_RANDOM",
+  "common_form": {
+    "workId": "5001", "jobid": "work-5001", "courseId": "2001", "clazzId": "1001", "knowledgeid": "4001", "cpi": "3001",
+    "enc": "SYNTHETIC_FORM_ENC", "totalQuestionNum": "5", "answerwqbid": "101,102,103,104,105,",
+    "answertype101": "0", "answertype102": "1", "answertype103": "3", "answertype104": "2", "answertype105": "4"
+  },
+  "forms": {
+    "full_submit": {"pyFlag": "", "answer101": "B", "answer102": "AC", "answer103": "true", "answer104": "合成填空", "answer105": "合成简答"},
+    "full_save": {"pyFlag": "1", "answer101": "B", "answer102": "AC", "answer103": "true", "answer104": "合成填空", "answer105": "合成简答"},
+    "low_coverage_save": {"pyFlag": "1", "answer101": "B", "answer102": "AC", "answer103": "", "answer104": "", "answer105": ""},
+    "threshold_submit": {"pyFlag": "", "answer101": "B", "answer102": "AC", "answer103": "true", "answer104": "合成填空", "answer105": "SYNTHETIC_RANDOM"},
+    "random_submit": {"pyFlag": "", "answer101": "SYNTHETIC_RANDOM", "answer102": "SYNTHETIC_RANDOM", "answer103": "SYNTHETIC_RANDOM", "answer104": "SYNTHETIC_RANDOM", "answer105": "SYNTHETIC_RANDOM"}
+  },
+  "incorrect_result": {"score": 80, "unknown": 0, "all_correct": false, "feedback": [{"id": "101", "title": "合成单选", "correct_answer": "A"}]}
+}

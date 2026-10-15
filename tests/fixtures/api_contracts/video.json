@@ -1,0 +1,29 @@
+{
+  "timestamp": "1700000000000",
+  "course": {"clazzId": "1001", "courseId": "2001", "cpi": "3001"},
+  "job": {
+    "jobid": "video-001", "objectid": "synthetic-object", "otherinfo": "nodeId_4001-rt_1",
+    "videoFaceCaptureEnc": "SYNTHETIC_FACE", "attDuration": 120,
+    "attDurationEnc": "SYNTHETIC_DURATION", "rt": "", "playTime": "45000", "name": "合成视频"
+  },
+  "status": {"status": "success", "dtoken": "SYNTHETIC_DTOKEN", "crc": "SYNTHETIC_CRC", "key": "SYNTHETIC_KEY", "duration": "120"},
+  "uid": "9001", "fid": "8001",
+  "signatures": {"0": "7ce53e45c581c89224519cc0fe95c25a", "45": "8cf10c75e68dde921d5fcc8eff6bb496", "120": "0c940c4b7fb8c86efc0254e65e8d9f0d"},
+  "status_request": {
+    "url": "https://mooc1.chaoxing.com/ananas/status/synthetic-object?k=8001&flag=normal",
+    "headers": {"Referer": "https://mooc1.chaoxing.com/ananas/modules/video/index.html?v=2025-0725-1842"}
+  },
+  "log_url": "https://mooc1.chaoxing.com/mooc-ans/multimedia/log/a/3001/SYNTHETIC_DTOKEN",
+  "headers": {"Referer": "https://mooc1.chaoxing.com/ananas/modules/video/index.html?v=2025-0725-1842"},
+  "common_params": {
+    "clazzId": "1001", "duration": 120, "clipTime": "0_120", "objectId": "synthetic-object",
+    "otherInfo": "nodeId_4001-rt_1", "courseId": "2001", "jobid": "video-001", "userid": "9001",
+    "view": "pc", "dtype": "Video", "videoFaceCaptureEnc": "SYNTHETIC_FACE",
+    "attDuration": 120, "attDurationEnc": "SYNTHETIC_DURATION", "rt": "1", "_t": "1700000000000"
+  },
+  "log_steps": [
+    {"playingTime": 120, "isdrag": 4, "enc": "0c940c4b7fb8c86efc0254e65e8d9f0d"},
+    {"playingTime": 45, "isdrag": 3, "enc": "8cf10c75e68dde921d5fcc8eff6bb496"},
+    {"playingTime": 120, "isdrag": 3, "enc": "0c940c4b7fb8c86efc0254e65e8d9f0d"}
+  ]
+}
