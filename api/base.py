@@ -304,7 +304,6 @@ class Chaoxing:
         self.cipher = AESCipher()
         self.tiku = tiku
         self.kwargs = kwargs
-        self.rollback_times = 0
         self.rate_limiter = RateLimiter(0.5)  # 其他接口速率限制比较松
         self.video_log_limiter = RateLimiter(2)  # 上报进度极其容易卡验证码，限制2s一次
 
@@ -971,6 +970,9 @@ class Chaoxing:
         else:
             max_retries = 0
         query_delay = self.kwargs.get("query_delay", 0)
+        # 重做计数是本次测验调用的局部状态: 以前挂在共享的 Chaoxing 实例上,
+        # 任一任务重做后会改变后续测验的保存/提交判定
+        rollback_times = 0
         feedback_history = None
         last_submitted_score = None
 
@@ -1095,7 +1097,7 @@ class Chaoxing:
             )
             if self.tiku.get_submit_params() == "1":
                 questions["pyFlag"] = "1"
-            elif is_manual_mode or cover_rate >= self.tiku.COVER_RATE * 100 or self.rollback_times >= 1:
+            elif is_manual_mode or cover_rate >= self.tiku.COVER_RATE * 100 or rollback_times >= 1:
                 questions["pyFlag"] = ""
             else:
                 questions["pyFlag"] = "1"
@@ -1192,7 +1194,7 @@ class Chaoxing:
                 f"章节检测有 {wrong_count}/{total_questions} 题回答错误（成绩 {score} 分），"
                 f"已将错误反馈给AI，准备重新作答提交 (第 {attempt + 1}/{max_retries + 1} 轮)"
             )
-            self.rollback_times += 1
+            rollback_times += 1
             last_submitted_score = score
 
         # 达到最大重试次数仍未全对
