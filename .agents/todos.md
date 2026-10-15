@@ -3,9 +3,10 @@
 ## API 施工方案
 
 - [x] 阶段 2-4（纯函数与小模块、数据解析、题库拆包）已完成，等价重构与缺陷修复分开处理；验收：逐点行为比对、离线回归、仓库外安装 smoke 与文档同步，结果见 `memory.md`。
-- [x] 修掉阶段 4 拆包自身引入的回归（`api/answer/core.py` 缺 `sub` 与 `CacheDAO` 导入，题库启用时 `query`/`query_all` 抛 `NameError`）；change `qvpsutuu`，验收：新增 `tests/test_answer_query.py` 覆盖查询管道，离线回归 110 项通过（含 2 项 `expectedFailure`），三种 CLI 入口帮助正常。
+- [x] 阶段 4 拆包回归（`api/answer/core.py` 缺 `sub` 与 `CacheDAO` 导入）；change `qvpsutuu`。
 - [ ] 阶段 5-6：会话、视频与测验流程拆分；当前 `api/base.py` 仍为 1528 行单体（`study_video:758`、`study_work:898`），`api/live_process.py` 的单静态方法包装仍在；验收：请求参数、签名、保存/提交与重做次数一致，并执行离线流程 smoke。
-- [ ] 第四节缺陷修复（Session 重建、单题查询丢答案、缓存跨实例竞争、测验状态跨任务共享、直播失败未传播）；复核后的代码位置、探针证据见施工方案「现状对照」。其中单题丢答案与反馈分支未绑定 `cache_dao` 已有 `expectedFailure` 回归，修复后必须移除标记；缓存跨实例丢更新已复现（并发各写 200 条只落盘 6 条），修法需先定一致性契约，不得在等价搬迁里顺手改。验收：先明确会话并发、缓存一致性与反馈作用域契约并复现消费者可见问题，再作为独立 fix 提交。
+- [x] 第四节缺陷修复，每项一个独立 change，行为差异先记入施工方案「修复契约」，结果见同文「修复实施结果」：查询管道 `qwknwrqv`、缓存并发 `lwnnruto`、Session `kvqxommw`、重做计数 `oxzzmolx`、直播失败 `upsmutkl`、判空顺序 `puwoqtnv`；验收：新增 `test_answer_query.py`、`test_answer_cache.py`、`test_session.py`、`test_work_state.py` 与直播失败两例，离线回归 128 项通过，修复后离线探针逐项确认。
+- [ ] 线上验收（需授权与可控测试课程）：直播失败触发章节重试后可能重复上报时长、测验保存/提交与覆盖率门槛、Cookie 失效重新登录，均未在离线环境验证。
 
 ## 文档中已明确的实现差异
 

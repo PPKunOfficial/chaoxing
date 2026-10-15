@@ -2,8 +2,8 @@
 
 ## 状态与范围
 
-- 状态：阶段 2-4（纯函数与小模块、数据解析、题库拆包）已实施；阶段 5-6 与第四节缺陷修复尚未执行。
-- 授权范围：只授权等价重构；缺陷修复仍需单独批准。本文其余内容保留调研时的分析与行号，不作为现状描述。
+- 状态：阶段 2-4（纯函数与小模块、数据解析、题库拆包）已实施；第四节列出的缺陷已按用户授权全部修复（含阶段 4 拆包引入的回归）；阶段 5-6 尚未执行。
+- 授权范围：等价重构与缺陷修复均已授权，但两者分开提交；缺陷修复的行为差异先记录在本节「修复契约」，每条一个独立 `fix` change。本文其余内容保留调研时的分析与行号，不作为现状描述。
 - 目标：按职责拆分、冻结协议行为、将缺陷修复与等价重构分开。
 - 原则：Pythonic 的收益是状态清楚、函数可测、依赖单向，不是推导式更多；不做全仓格式化式大拆迁。
 - 调研期间未编辑代码、未创建提交；调研结束时 `jj status` 确认工作区为空。
@@ -14,7 +14,7 @@
 - 复核依据：阶段 4 实施后重新读取 `api/`、`chaoxing_app/` 与调用方，并在仓库外运行离线探针（不联网）；离线回归基线为 `uv run --python 3.13 python -m unittest discover -s tests -t .`。
 - `api/answer.py` 已删除并拆为 `api/answer/` 包：查询管道 `core.py`、缓存 `cache.py`、回退 `fallback.py`、注册表 `registry.py`、各 provider `providers/`。本文其余部分凡引用 `api/answer.py` 的行号都已失效，仅作调研时记录保留。
 - 复核发现阶段 4 拆包本身引入了一处回归：`api/answer/core.py` 丢了 `sub` 与 `CacheDAO` 两个导入，题库启用时 `query`/`query_all` 首行即抛 `NameError`。已在 change `qvpsutuu` 修复并补回归，见下方「拆包回归」。
-- 第四节五个缺陷在复核时仍然存在，当前位置与实测证据如下：
+- 第四节五个缺陷在复核时仍然存在（上表与下文行号为修复前位置）；随后按授权修复，实施结果与 change 对应关系见本节「修复实施结果」。
   - Session 反复重建：`api/base.py:46-49` 的单例 `__new__` 与 `api/base.py:51-60` 每次调用都重建 Session 的 `__init__`；`get_session()`（`:67-69`）经 `cls()` 触发构造。
   - 单题查询丢答案：`api/answer/core.py:104-119`，缓存未命中分支把 `self._query()` 的结果赋给 `answer`（`:105`）后未返回，最终落到 `:119` 的 `return None`；批量路径 `query_all`（`:121-179`）正常。同一名字 `cache_dao` 只在 `:99` 的缓存分支绑定，反馈分支 `:112` 使用的是未绑定的局部名（探针实测抛 `UnboundLocalError`）。
   - 缓存跨实例竞争：`api/answer/cache.py:24`，每个 `CacheDAO` 实例各自持有 `RLock`。**已动态复现**：两个实例并发各写 200 条，期望 400 条、实际落盘 6 条、丢 394 条；Windows 上还会出现 `os.replace` 报 `WinError 5 拒绝访问` 与 `_read_cache` 报 `Permission denied`（一个线程持有目标文件时另一线程的原子替换失败）。
@@ -22,7 +22,7 @@
   - 直播失败未向外传播：`chaoxing_app/jobs.py:77` 丢弃 `run_live()` 的返回值，随后直接返回 `StudyResult.SUCCESS`。
 - 「共享题库反馈污染」仍属未复现的推断；「缓存跨实例丢更新」已由探针复现，不再是推断。
 - 阶段 1 要求的脱敏 HTML/JSON、缓存与请求样本没有独立留档；阶段 5-6 实施前需按当前路径重新采集。
-- 本文状态段的授权范围未变化：只授权等价重构；第四节缺陷修复需单独批准，其中「补回拆包丢失的导入」属于恢复拆包前的等价行为，已作为独立 fix 处理。
+- 本轮修复后授权范围已扩展：第四节缺陷已全部修复并单独提交，阶段 5-6 仍未授权。
 
 ### 拆包回归（阶段 4 引入，已修复）
 
@@ -118,7 +118,7 @@ api/
 
 ## 四、需要单独处理的缺陷
 
-这些不属于“写法更 Pythonic”，应独立批准与 `fix` 提交，不在等价搬迁中偷偷修正。阶段 4 拆包自己引入的回归（缺失导入）见上面「拆包回归」，已作为独立 fix 修复。
+这些不属于“写法更 Pythonic”，应独立批准与 `fix` 提交，不在等价搬迁中偷偷修正。阶段 4 拆包自己引入的回归（缺失导入）见上面「拆包回归」。表中「证据」列保留修复前的定位与探针输出，修复后位置见「修复实施结果」。
 
 | 问题 | 证据及处理建议 |
 | --- | --- |
@@ -183,11 +183,39 @@ cache keys expected: 400 stored: 6 lost: 394
 
 缓存丢更新已由第二次探针复现（见上）；共享反馈污染仍未动态复现，不得将推断写成已证实故障。
 
+### 修复实施结果
+
+每条一个独立 change，均为 `fix`；测试与文档同步提交，未与等价重构混提。
+
+| 缺陷 | change | 改动 | 回归 |
+| --- | --- | --- | --- |
+| 查询管道（单题丢答案 + 未绑定 `cache_dao`） | `qwknwrqv` | `api/answer/core.py`：把 `cache_dao` 提到分支外，缓存未命中也走"校验 → 回写 → 返回" | `tests/test_answer_query.py` 去掉 2 处 `expectedFailure`，新增缓存命中 / 反馈跳缓存 / 题型不符丢弃 3 例 |
+| 缓存跨实例丢更新 | `lwnnruto` | `api/answer/cache.py`：按文件路径共享锁；读取区分"文件缺失/内容损坏"与 IO 失败，后者按缓存不可用处理 | 新增 `tests/test_answer_cache.py`（共享锁、并发 400 写入、损坏备份、读取失败不覆盖） |
+| Session 反复重建 | `kvqxommw` | `api/base.py`：`SessionManager` 加实例锁与初始化锁，`__init__` 自查后只建一次会话 | 新增 `tests/test_session.py`（对象同一、header 保留、并发访问单实例） |
+| 测验状态跨任务共享 | `oxzzmolx` | `api/base.py`：`rollback_times` 改为 `study_work` 内局部变量，删除实例属性 | 新增 `tests/test_work_state.py`（客户端不含该状态、源码不再引用） |
+| 直播失败未传播 | `upsmutkl` | `chaoxing_app/jobs.py` 检查返回值并返回 `ERROR`；`api/live_process.py` 记录重试结果但不改控制流 | `tests/test_job_processor.py` 新增失败/成功两例 |
+| 无题库实例判定顺序 | `puwoqtnv` | `api/base.py`：先判 `None` 再读 `DISABLE` | `tests/test_work_state.py` 新增 `tiku=None` 与停用短路两例 |
+
+修复后离线探针（不联网、无 monkeypatch）输出：
+
+```text
+single query result: 'B'
+batch query result: ['B']
+feedback-mode single query: 'B'
+session identity preserved: True
+session header preserved: 1
+cache keys expected: 400 stored: 400
+work without tiku: StudyResult.SUCCESS
+shared rollback_times attribute: False
+```
+
+未覆盖项：直播失败会触发既有章节重试，因而可能重复上报直播时长；真实重投需要可控测试课程，未在离线环境验证。测验保存/提交策略（覆盖率门槛、重做轮次）同样需要真实课程才能端到端确认。
+
 ### 推荐处理顺序
 
 查询缺陷先修；会话与跨任务状态先明确契约，再修，再拆流程。不把已知有问题的实现搬到漂亮的新目录里就算完工。
 
-会话策略、反馈作用域、缓存并发保证的具体实现尚未定案；实施时先用现有调用与复现证据选择保守方案。不得未经批准引入跨进程缓存锁、线程本地 Session 或新的共享状态机制。
+会话策略、缓存并发与反馈作用域的实现已按「修复契约」定案并落地（进程内共享锁、显式 cookie 同步、每测验局部状态）；跨进程缓存锁、线程本地 Session 或新的共享状态机制仍未引入，需要时另行批准。
 
 ## 五、必须保留的行为边界
 
