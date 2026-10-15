@@ -128,6 +128,35 @@ api/
 | 测验状态跨任务共享 | 调研位置 `api/base.py:388,1179,1276`，复核位置 `api/base.py:292,1083,1180` 的 `rollback_times`；`chaoxing_app/cli.py:115` 单实例跨任务复用。反馈也写入共享题库。缩小为每测验状态会改变提交行为，需要独立处理 |
 | 直播失败未向外传播 | `chaoxing_app/jobs.py:77` 忽略 `run_live()` 返回值。改为失败会触发章节重试，不应夹在文件合并里 |
 
+### 修复契约（实施前定案）
+
+授权范围已由用户扩展为"修复本节全部缺陷"；仍保持等价重构与行为修复分开提交，每项一个独立 `fix` change。下列行为差异在动代码前记录：
+
+1. 题库查询管道（`api/answer/core.py`）
+   - 契约：`query()` 与 `query_all()` 对同一输入必须给出相同答案；缓存未命中时把 provider 结果经 `check_answer` 校验后返回并回写缓存；存在 `work_feedback` 时按既有规则跳过缓存读取、成功后仍回写。
+   - 行为差异：修复前 `query()` 缓存未命中即返回 `None`（答案被丢弃），反馈分支还会因 `cache_dao` 未绑定抛 `UnboundLocalError`；修复后与批量路径一致。缓存命中、反馈跳缓存、手动校验豁免与既有日志文案不变。
+   - 验证：`tests/test_answer_query.py` 移除两处 `expectedFailure`，并新增反馈模式跳缓存用例。
+2. 缓存并发一致性（`api/answer/cache.py`）
+   - 契约：指向同一缓存文件的 `CacheDAO` 实例共享一把 `threading.RLock`（按解析后的文件路径登记），`get_cache`/`add_cache` 的读-改-写在锁内完成；跨进程并发不在本轮范围，不引入跨进程锁。
+   - 读取失败差异：文件不存在或 JSON/编码损坏仍返回 `{}` 并保留备份与原子替换；其他 `OSError`（如 Windows 共享冲突）有限重试后向上抛出，不再被吞成"空缓存"并覆盖整表。
+   - 行为差异：并发写同一文件由"整表被清空重写"变为"写入全部保留"；单线程行为不变。
+   - 验证：新增并发回归（两实例并发写入后断言键数完整）。
+3. Session 生命周期（`api/base.py`）
+   - 契约：进程内只构造一次 `requests` Session，构造过程加锁；cookie 变更通过 `update_cookies()` 显式同步到既有会话；`get_session()` 始终返回同一对象。
+   - 行为差异：修复前每次获取都新建 Session（顺带重读 cookies 文件、重设 header）；修复后对象稳定、内存态不再丢失，但中途手工修改 cookies 文件需显式调用 `update_cookies()` 才会生效。
+   - 验证：新增回归断言对象同一且运行时 header 保留。
+4. 测验重做计数（`api/base.py`）
+   - 契约：重做计数是每次 `study_work` 调用的局部状态，不再挂进程级 `Chaoxing` 实例。
+   - 行为差异：修复前任一任务重做后，后续测验第一轮即满足 `rollback_times >= 1` 而直接提交（绕过"覆盖率不足则只保存"的门槛）；修复后每个测验独立判定。`StudyResult` 语义不变。
+   - 验证：提交策略无法离线验证，记录为未覆盖项，由"状态不跨调用"的代码约束与本文保证。
+5. 直播失败传播（`chaoxing_app/jobs.py`、`api/live_process.py`）
+   - 契约：`run_live()` 返回 `False` 时该任务点返回 `StudyResult.ERROR`，交给既有章节重试；每分钟提交失败后的一次重试结果记入日志，但不改变控制流（避免重复上报已计入的时长）。
+   - 行为差异：修复前失败也返回 SUCCESS 并视为完成；修复后失败会触发章节重试，可能重复上报直播时长，需在可控测试课程下验收。
+   - 验证：新增回归（`run_live` 返回 `False` 时 `process_job` 返回 ERROR）；真实重投列入线上验收清单。
+6. 无题库实例的判定顺序（`api/base.py:899`）
+   - 契约：`tiku` 为 `None` 或已停用都跳过该任务点并返回 SUCCESS，与既有 `DISABLE` 分支一致。
+   - 行为差异：修复前 `tiku=None` 先访问 `.DISABLE` 抛 `AttributeError`（经线程包装会中断流程）；修复后按原注释意图跳过。CLI 路径始终传入实例，行为不变。
+
 ### 实际调研输出
 
 仓库外临时目录中的离线探针，没有发送网络请求，观察到：
