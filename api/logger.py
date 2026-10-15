@@ -3,6 +3,8 @@ import sys
 from loguru import logger
 from tqdm import tqdm
 
+from api.interaction import is_manual_input_active
+
 tqdm_stream = sys.stderr
 
 # 日志缓冲区，用于在手动答题时缓存后台日志，答题结束后统一输出
@@ -11,17 +13,7 @@ MAX_LOG_BUFFER_SIZE = 1000
 
 
 def tqdm_sink(msg):
-    manual_locked = False
-    try:
-        # 动态获取手动题库模块中的 TikuManual 锁，避免循环导入
-        if 'api.answer.providers.manual' in sys.modules:
-            TikuManual = getattr(sys.modules['api.answer.providers.manual'], 'TikuManual', None)
-            if TikuManual and getattr(TikuManual, '_manual_lock', None):
-                manual_locked = TikuManual._manual_lock.locked()
-    except (AttributeError, KeyError, ImportError):
-        pass
-
-    if manual_locked:
+    if is_manual_input_active():
         if len(log_buffer) < MAX_LOG_BUFFER_SIZE:
             log_buffer.append(msg)
     else:

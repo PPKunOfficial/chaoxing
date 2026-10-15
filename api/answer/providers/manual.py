@@ -1,15 +1,14 @@
 # -*- coding: utf-8 -*-
 """手动输入题库 provider：单题与批量交互、输入校验与日志缓冲解锁。"""
 import re
-import threading
 from typing import Optional
 
 from api.answer.core import Tiku
+from api.interaction import manual_input_lock
 from api.logger import logger
 
 
 class TikuManual(Tiku):
-    _manual_lock = threading.Lock()
     is_manual = True
 
     def __init__(self, config_path: Optional[str] = None) -> None:
@@ -64,7 +63,7 @@ class TikuManual(Tiku):
         # 强行关闭清除所有当前活动的 tqdm 进度条
         self._safe_close_tqdm_bars()
 
-        with self._manual_lock:
+        with manual_input_lock:
             ans = self._single_query(q_info)
         logger.debug("手动答题结束，冲刷缓存日志")
         return ans
@@ -73,7 +72,7 @@ class TikuManual(Tiku):
         # 强行关闭清除所有当前活动的 tqdm 进度条
         self._safe_close_tqdm_bars()
 
-        with self._manual_lock:
+        with manual_input_lock:
             print(f"\n{'=' * 20} 手动输入题库 (共 {len(q_list)} 题) {'=' * 20}")
             if self.default_mode == 'batch':
                 ans_list = self._batch_query_flow(q_list)

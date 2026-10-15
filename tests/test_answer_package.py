@@ -12,6 +12,7 @@ from api.answer.fallback import TikuFallback
 from api.answer.providers.manual import TikuManual
 from api.answer.registry import DummyTiku, PROVIDER_REGISTRY, get_tiku_from_config
 from api.logger import log_buffer, tqdm_sink
+from api.interaction import manual_input_lock
 
 CONFIG_PATH = "config_template.ini"
 
@@ -93,8 +94,9 @@ class TikuInstanceStateTest(unittest.TestCase):
 class ManualModeLogCoordinationTest(unittest.TestCase):
     def test_logs_are_buffered_while_manual_lock_is_held(self):
         """手动输入期间日志进缓冲, 解锁后统一输出。"""
+        self.addCleanup(log_buffer.clear)
         with patch("api.logger.tqdm.write") as write:
-            with TikuManual._manual_lock:
+            with manual_input_lock:
                 log_buffer.clear()
                 tqdm_sink("held-line")
                 self.assertIn("held-line", log_buffer)

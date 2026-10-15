@@ -18,7 +18,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception
 from tqdm import tqdm
 
 from api.answer.core import Tiku
-from api.answer.providers.manual import TikuManual
+from api.interaction import is_manual_input_active
 from api.answer_check import cut, grade_work_detail
 from api.cipher import AESCipher
 from api.config import GlobalConst as gc
@@ -854,14 +854,8 @@ class Chaoxing:
                 last_iter = time.time()
                 play_time = min(duration, play_time + dt)
 
-                # 检查手动模式锁是否被锁定
-                manual_locked = False
-                try:
-                    manual_locked = TikuManual._manual_lock.locked()
-                except Exception as e:
-                    logger.trace(f"无法检查手动锁状态: {e}")
-
-                if manual_locked:
+                # 手动输入期间暂时关闭视频进度展示
+                if is_manual_input_active():
                     pbar = self._close_pbar_safe(pbar)
                 else:
                     if pbar is None:
