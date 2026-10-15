@@ -7,6 +7,7 @@
 """
 import threading
 import unittest
+from unittest.mock import patch
 
 from api.base import SessionManager
 
@@ -22,9 +23,13 @@ class SessionManagerTest(unittest.TestCase):
 
         self.assertEqual(SessionManager.get_session().headers.get("X-Probe-Session"), "1")
 
-    def test_default_headers_are_applied_once(self):
-        session = SessionManager.get_session()
-        self.assertTrue(session.headers.get("User-Agent"))
+    def test_session_is_constructed_only_once(self):
+        """修复前每次获取都重建会话(顺带重读 cookie 文件), 用调用次数锁住该行为。"""
+        SessionManager.get_session()
+        with patch("api.base.use_cookies") as use_cookies:
+            for _ in range(3):
+                SessionManager.get_session()
+            use_cookies.assert_not_called()
 
     def test_update_cookies_keeps_session_identity(self):
         session = SessionManager.get_session()

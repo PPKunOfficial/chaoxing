@@ -6,7 +6,8 @@
 - [x] 阶段 4 拆包回归（`api/answer/core.py` 缺 `sub` 与 `CacheDAO` 导入）；change `qvpsutuu`。
 - [ ] 阶段 5-6：会话、视频与测验流程拆分；当前 `api/base.py` 仍为 1528 行单体（`study_video:758`、`study_work:898`），`api/live_process.py` 的单静态方法包装仍在；验收：请求参数、签名、保存/提交与重做次数一致，并执行离线流程 smoke。
 - [x] 第四节缺陷修复，每项一个独立 change，行为差异先记入施工方案「修复契约」，结果见同文「修复实施结果」：查询管道 `qwknwrqv`、缓存并发 `lwnnruto`、Session `kvqxommw`、重做计数 `oxzzmolx`、直播失败 `upsmutkl`、判空顺序 `puwoqtnv`；验收：新增 `test_answer_query.py`、`test_answer_cache.py`、`test_session.py`、`test_work_state.py` 与直播失败两例，离线回归 128 项通过，修复后离线探针逐项确认。
-- [ ] 线上验收（需授权与可控测试课程）：直播失败触发章节重试后可能重复上报时长、测验保存/提交与覆盖率门槛、Cookie 失效重新登录，均未在离线环境验证。
+- [ ] 线上验收（需授权与可控测试课程）：直播失败触发章节重试会连带重跑同章节其他任务点（可能重复上报视频/文档进度与测验提交）、测验保存/提交与覆盖率门槛、Cookie 失效重新登录，均未在离线环境验证。
+- [ ] 待定：共享 Session 被 4 个 worker 线程并发使用时的线程模型（线程隔离、加锁或维持现状）；验收：先给出并发契约与复现证据，再改代码。
 
 ## 文档中已明确的实现差异
 

@@ -3,8 +3,9 @@
 
 阶段 4 拆包后 `api/answer/core.py` 丢了 `sub` 与 `CacheDAO` 两个导入，此前
 只有注册表与实例状态的测试，从未调用 `query`/`query_all`，因此没有被发现。
-本文件覆盖查询管道本身；`.agents/api重构施工方案.md` 第四节记录了两条仍待
-单独授权的缺陷，用 `expectedFailure` 标记，修复后必须移除标记。
+本文件覆盖查询管道本身：它同时是阶段 4 缺导入回归与第四节两条查询缺陷（单题丢答案、
+反馈分支未绑定 `cache_dao`）的回归护栏，修复后已无 `expectedFailure` 标记；
+`.agents/api重构施工方案.md` 第四节记录了契约与实施结果。
 """
 import functools
 import json
