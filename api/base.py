@@ -40,24 +40,39 @@ def get_timestamp():
 
 
 class SessionManager:
+    """进程内唯一的 Session 持有者。
+
+    契约见 `.agents/api重构施工方案.md` 第四节「修复契约」：会话只构造一次，
+    构造过程加锁；cookie 变更由 `update_cookies()` 显式同步到既有会话。
+    """
     _instance = None
+    _instance_lock = threading.Lock()
+    _init_lock = threading.Lock()
     _login_lock = threading.Lock()
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
+            with cls._instance_lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
         return cls._instance
 
     def __init__(self):
-        self._session = requests.Session()
-        self._session.mount("https://", HTTPAdapter(max_retries=10))
-        self._session.mount("http://", HTTPAdapter(max_retries=10))
-        self._session.request = functools.partial(self._session.request, timeout=5)
-        # For debug purposes
-        # self._session.verify=False
-        self._session.headers.clear()
-        self._session.headers.update(gc.HEADERS)
-        self._session.cookies.update(use_cookies())
+        # Cls() 每次都会调用 __init__, 所以这里必须自查: 以前每次都重建 Session,
+        # 导致运行期设置的 header 与仅存在于内存的 cookie 丢失
+        with self._init_lock:
+            if getattr(self, "_session", None) is not None:
+                return
+            session = requests.Session()
+            session.mount("https://", HTTPAdapter(max_retries=10))
+            session.mount("http://", HTTPAdapter(max_retries=10))
+            session.request = functools.partial(session.request, timeout=5)
+            # For debug purposes
+            # session.verify=False
+            session.headers.clear()
+            session.headers.update(gc.HEADERS)
+            session.cookies.update(use_cookies())
+            self._session = session
 
     @classmethod
     def get_instance(cls) -> Self:
