@@ -66,7 +66,12 @@ class CacheDAO:
                     return {}
                 try:
                     with self.cache_file.open("r", encoding="utf8") as fp:
-                        return json.load(fp)
+                        data = json.load(fp)
+                    if not isinstance(data, dict):
+                        # 语法合法但根节点不是对象(如 [1]): 后续 data.get/data[key] 会抛
+                        # AttributeError 或 TypeError, 因此按内容损坏走备份与重建
+                        raise json.JSONDecodeError("缓存根节点不是 JSON 对象", "", 0)
+                    return data
                 except json.JSONDecodeError as e:
                     logger.error(f"缓存文件 JSON 解析失败: {e}, 尝试恢复...")
                     # 尝试从原始二进制中以 utf-8 忽略错误地恢复有效 JSON 段

@@ -115,6 +115,9 @@ class JobProcessor:
         self.threads: list[threading.Thread] = []
         self.worker_num = config.get("jobs") or 4
         self.config = dict(config)
+        # `ask` 尚未实现真正的询问, 与 retry 同分支; 明确提示而不是静默按重试处理
+        if self.config.get("notopen_action") == "ask":
+            logger.warning("notopen_action=ask 目前与 retry 同一分支, 将按重试处理, 不会询问")
         self.retry_interval = config.get("retry_interval", 1.0)
         self._condition = threading.Condition()
         self._pending = 0

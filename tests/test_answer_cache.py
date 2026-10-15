@@ -60,6 +60,19 @@ class CacheConcurrencyTest(unittest.TestCase):
         backups = [name for name in os.listdir(self._tmp.name) if ".bak." in name]
         self.assertEqual(len(backups), 1)
 
+    def test_non_object_json_is_treated_as_corrupt_without_raising(self):
+        """语法合法但根节点不是对象(如 [1])时不得抛 AttributeError/TypeError。"""
+        for payload in ("[1]", '"text"', "123", "null"):
+            with self.subTest(payload=payload):
+                with open(self.path, "w", encoding="utf8") as fp:
+                    fp.write(payload)
+                dao = CacheDAO(self.path)
+                self.assertIsNone(dao.get_cache("题目"))
+                self.assertTrue([n for n in os.listdir(self._tmp.name) if ".bak." in n])
+                dao.add_cache("题目", "A")
+                with open(self.path, encoding="utf8") as fp:
+                    self.assertEqual(json.load(fp), {"题目": "A"})
+
     def test_persistent_read_failure_skips_write_without_clobbering(self):
         """持续读取失败时不得把整表覆盖成只剩新键。"""
         dao = CacheDAO(self.path)

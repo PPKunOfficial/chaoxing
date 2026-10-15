@@ -87,6 +87,19 @@ class JobProcessorTestCase(unittest.TestCase):
         self.assertEqual(task.result, main.ChapterResult.NOT_OPEN)
         self.assertEqual(processor.failed_tasks, [])
 
+    def test_ask_action_warns_that_it_retries(self):
+        """`ask` 与 retry 同分支, 构造时明确提示, 不静默按重试处理。"""
+        with patch.object(main, "logger") as logger_mock:
+            self._make_processor(self._not_open_job_info(), notopen_action="ask")
+        logger_mock.warning.assert_called_once()
+        self.assertIn("ask", logger_mock.warning.call_args.args[0])
+
+    def test_retry_and_continue_actions_do_not_warn(self):
+        for action in ("retry", "continue"):
+            with self.subTest(action=action), patch.object(main, "logger") as logger_mock:
+                self._make_processor(self._not_open_job_info(), notopen_action=action)
+            logger_mock.warning.assert_not_called()
+
     def test_error_retry_behavior_unchanged(self):
         processor, task = self._make_processor(self._error_job_info(), max_tries=5)
         self._run_with_timeout(processor)
