@@ -51,3 +51,14 @@ defined = set(table.get_identifiers())  # 再并入各函数内 global 赋值过
 ## 读取失败被吞成"空缓存"会清空整表
 
 `api/answer/cache.py` 原来用最外层 `except Exception: return {}` 包住读取，Windows 上"另一线程持有缓存文件"导致的 `PermissionError`（共享冲突）也被当成"缓存是空的"，随后"读-改-写"把这本空字典加一个新键写回，整表被清空重写。缓解方式：读取层只把"文件不存在 / JSON 或编码损坏"当空缓存，其他 `OSError` 有限重试后按"缓存不可用"处理（读=未命中、写=跳过并记日志）；同时按缓存文件路径共享锁，避免同一进程内的读-改进程交错。不要用宽泛的 `except Exception` 包住"读-改-写"的读，否则失败会被误当成业务状态。
+
+## GitHub 直连不通需走本地代理
+
+本机直连 `github.com:443` 会被重置（`Recv failure: Connection was reset` / 连接超时），但 `127.0.0.1:7897` 有本地代理在跑。`jj git fetch`、`jj git push`、`git ls-remote` 都需要带上代理才通：
+
+```powershell
+$env:HTTPS_PROXY="http://127.0.0.1:7897"; $env:HTTP_PROXY="http://127.0.0.1:7897"
+jj git fetch; jj git push --bookmark main
+```
+
+先用 `git ls-remote` 判断是不是网络问题，再怀疑凭据或书签；代理只放进进程环境变量，不写进 git 或 jj 配置。

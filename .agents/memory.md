@@ -13,8 +13,9 @@
 - 已使用 Jujutsu colocated 模式，保留 Git 后端；禁止用 Git 写状态。`.jj/` 缺失时用 `jj git init --colocate` 恢复，而不是重建或改写历史。
 - `.jj/` 不随 `git clone` 复制：本工作副本是重新 clone 的纯 Git 仓库，复核时重建了 colocated 元数据并 `jj bookmark track main@origin`；导入后 jj 推出的 change ID 与既有记录一致，说明历史未被改写。
 - jj 二进制位于 `C:\Users\ppkun\AppData\Local\Microsoft\WinGet\Links\jj.exe`（0.45.1），本会话 PATH 未包含，需用绝对路径调用；仓库级 `user.name`/`user.email` 与 git 配置一致。
-- 本地提交：`utlovuxp` CLI 重构、`npywrswo` Jujutsu 文档、`rrrklrkr` 工作流迁移、`nsuroxsp` API 施工方案、`tpyzokpu`/`txqptvwk`/`mylrlyor` API 阶段 2-4、`kzvmmpux` 记录更新、`ypvplmlw` 记录 main 位置、`nqowvmoz` 复核现状、`qvpsutuu` 补导入修复、`zmqolksk` 复核文档、`kuxywyko` 修复契约、`qwknwrqv` 查询管道、`lwnnruto` 缓存并发、`kvqxommw` Session、`oxzzmolx` 重做计数、`upsmutkl` 直播失败、`puwoqtnv` 判空顺序。
-- `main` 现为 `ypvplmlw`（`94a205f`）并已推送到 `origin`；本轮修复只提交到本地 change，尚未推送；发布与提交是两步操作, 再次推送前先 `jj git fetch`。
+- 本地提交：`utlovuxp` CLI 重构、`npywrswo` Jujutsu 文档、`rrrklrkr` 工作流迁移、`nsuroxsp` API 施工方案、`tpyzokpu`/`txqptvwk`/`mylrlyor` API 阶段 2-4、`kzvmmpux` 记录更新、`ypvplmlw` 记录 main 位置、`nqowvmoz` 复核现状、`qvpsutuu` 补导入修复、`zmqolksk` 复核文档、`kuxywyko` 修复契约、`qwknwrqv` 查询管道、`lwnnruto` 缓存并发、`kvqxommw` Session、`oxzzmolx` 重做计数、`upsmutkl` 直播失败、`puwoqtnv` 判空顺序、`worptzsz` 修复实施结果、`nlqpxmmx` 复查结论。
+- `main` 现为 `nlqpxmmx`（`549be08e`，比此前记录的 `ypvplmlw` 多 12 条提交：复核记录、补导入修复、缺陷修复 6 条、文档 4 条）并已推送到 `origin`；推送前 `jj git fetch` 显示远端无变化，属快进。发布与提交是两步操作, 再次推送前先 `jj git fetch`。
+- 本机直连 GitHub 会被重置，需经本地代理：`HTTPS_PROXY`/`HTTP_PROXY=http://127.0.0.1:7897`（进程内环境变量即可，未写入 git/jj 配置）。
 - 后续版本位置以 `jj status`、`jj log` 为准，不使用本记录推断工作区是否干净。
 
 ## 授权与未实施方案
