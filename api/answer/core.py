@@ -95,27 +95,25 @@ class Tiku(ABC):
             logger.debug(f"处理后标题：{q_info['title']}")
 
         # 先过缓存（若存在章节检测错误反馈，说明处于重做模式，跳过缓存让大模型参考反馈重新作答）
+        cache_dao = CacheDAO()
         if not getattr(self, 'work_feedback', None):
-            cache_dao = CacheDAO()
             answer = cache_dao.get_cache(q_info['title'])
             if answer:
                 logger.info(f"从缓存中获取答案：{q_info['title']} -> {answer}")
                 return answer.strip()
-            else:
-                answer = self._query(q_info)
-        else:
-            answer = self._query(q_info)
-            if answer:
-                answer = answer.strip()
-                logger.info(f"从{self.name}获取答案：{q_info['title']} -> {answer}")
-                if check_answer(answer, q_info['type'], self):
-                    cache_dao.add_cache(q_info['title'], answer)
-                    return answer
-                else:
-                    logger.info(f"从{self.name}获取到的答案类型与题目类型不符，已舍弃")
-                    return None
 
-            logger.error(f"从{self.name}获取答案失败：{q_info['title']}")
+        answer = self._query(q_info)
+        if answer:
+            answer = answer.strip()
+            logger.info(f"从{self.name}获取答案：{q_info['title']} -> {answer}")
+            if check_answer(answer, q_info['type'], self):
+                cache_dao.add_cache(q_info['title'], answer)
+                return answer
+
+            logger.info(f"从{self.name}获取到的答案类型与题目类型不符，已舍弃")
+            return None
+
+        logger.error(f"从{self.name}获取答案失败：{q_info['title']}")
         return None
 
     def query_all(self, q_list: list[dict], query_delay: float = 0.0) -> list[Optional[str]]:

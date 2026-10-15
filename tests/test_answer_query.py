@@ -93,29 +93,42 @@ class QueryPipelineTest(unittest.TestCase):
         self.assertEqual(tiku.query_all([question("1. 题目标题"), question("2. 另一题")]), [None, None])
         self.assertEqual(tiku.seen_titles, [])
 
-    @unittest.expectedFailure
     def test_single_query_returns_provider_answer_on_cache_miss(self):
-        """已知缺陷: 缓存未命中时单题查询丢弃答案、返回 None。
-
-        现状见 `.agents/api重构施工方案.md` 第四节「单题查询丢答案」;
-        修好后此标记会让本用例报 unexpected success, 必须同时移除。
-        """
+        """单题查询与批量查询必须同结果: 缓存未命中时返回 provider 答案并回写缓存。"""
         tiku = ProbeTiku()
         tiku.DISABLE = False
 
         self.assertEqual(tiku.query(question("1. 题目标题")), "B")
+        self.assertEqual(tiku.seen_titles, [". 题目标题"])
+        self.assertEqual(CacheDAO(str(self.cache_file)).get_cache(". 题目标题"), "B")
 
-    @unittest.expectedFailure
-    def test_feedback_mode_single_query_binds_cache_dao(self):
-        """已知缺陷: 反馈模式分支引用未绑定的 cache_dao, 抛 UnboundLocalError。
+    def test_single_query_returns_cached_answer_without_provider(self):
+        tiku = ProbeTiku()
+        tiku.DISABLE = False
+        CacheDAO(str(self.cache_file)).add_cache(". 题目标题", "C")
 
-        现状见 `.agents/api重构施工方案.md` 第四节; 修好后必须移除标记。
-        """
+        self.assertEqual(tiku.query(question("1. 题目标题")), "C")
+        self.assertEqual(tiku.seen_titles, [])
+
+    def test_feedback_mode_single_query_skips_cache_and_still_writes(self):
+        """重做模式跳过缓存读取, 但拿到答案后仍回写缓存。"""
         tiku = ProbeTiku()
         tiku.DISABLE = False
         tiku.work_feedback = "上一轮错误反馈"
+        CacheDAO(str(self.cache_file)).add_cache(". 题目标题", "C")
 
         self.assertEqual(tiku.query(question("1. 题目标题")), "B")
+        self.assertEqual(tiku.seen_titles, [". 题目标题"])
+        self.assertEqual(CacheDAO(str(self.cache_file)).get_cache(". 题目标题"), "B")
+
+    def test_single_query_discards_answer_of_wrong_type(self):
+        """题型不符的答案被舍弃, 不写缓存。"""
+        tiku = ProbeTiku()
+        tiku.DISABLE = False
+        tiku.answer = "对"
+
+        self.assertIsNone(tiku.query(question("1. 题目标题", q_type="multiple")))
+        self.assertIsNone(CacheDAO(str(self.cache_file)).get_cache(". 题目标题"))
 
 
 if __name__ == "__main__":
