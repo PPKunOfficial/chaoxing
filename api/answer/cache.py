@@ -11,6 +11,20 @@ from typing import Optional
 
 from api.logger import logger
 
+# 同一缓存文件在所有实例间共用一把锁: 读-改-写必须串行, 否则并发写会互相覆盖
+_LOCKS: dict[str, threading.RLock] = {}
+_LOCKS_GUARD = threading.Lock()
+
+
+def _lock_for(path: Path) -> threading.RLock:
+    key = str(path.resolve())
+    with _LOCKS_GUARD:
+        lock = _LOCKS.get(key)
+        if lock is None:
+            lock = threading.RLock()
+            _LOCKS[key] = lock
+        return lock
+
 
 class CacheDAO:
     """
@@ -18,14 +32,33 @@ class CacheDAO:
     @Reference: https://github.com/SocialSisterYi/xuexiaoyi-to-xuexitong-tampermonkey-proxy
     """
     DEFAULT_CACHE_FILE = "cache.json"
+    READ_RETRY_TIMES = 5
+    READ_RETRY_INTERVAL = 0.05
 
     def __init__(self, file: str = DEFAULT_CACHE_FILE):
         self.cache_file = Path(file)
-        self._lock = threading.RLock()
+        self._lock = _lock_for(self.cache_file)
         if not self.cache_file.is_file():
             self._write_cache({})
 
-    def _read_cache(self) -> dict:
+    def _read_cache(self) -> Optional[dict]:
+        """读取缓存; 持续读取失败时返回 None, 由调用方按"缓存不可用"处理。
+
+        以前把任何异常都吞成"空缓存", 于是后续写入会把整表覆盖掉; 这里只对
+        文件不存在与内容损坏按空缓存继续, 其他 IO 失败有限重试后返回 None。
+        """
+        last_error = None
+        for attempt in range(self.READ_RETRY_TIMES):
+            try:
+                return self._read_cache_once()
+            except OSError as exc:
+                last_error = exc
+                if attempt + 1 < self.READ_RETRY_TIMES:
+                    time.sleep(self.READ_RETRY_INTERVAL)
+        logger.error(f"缓存文件读取失败, 已重试 {self.READ_RETRY_TIMES} 次: {last_error}")
+        return None
+
+    def _read_cache_once(self) -> dict:
         # 新增缓存文件读取的异常处理
         try:
             with self._lock:
@@ -80,6 +113,9 @@ class CacheDAO:
                     except Exception as ex:
                         logger.error(f"备份损坏缓存失败: {ex}")
                     return {}
+        except OSError:
+            # 交由 _read_cache 重试, 不在这里吞成空缓存
+            raise
         except Exception as e:
             logger.error(f"读取缓存异常: {e}")
             return {}
@@ -112,11 +148,17 @@ class CacheDAO:
 
     def get_cache(self, question: str) -> Optional[str]:
         data = self._read_cache()
+        if data is None:
+            # 缓存不可用按未命中处理, 交给题库继续查询
+            return None
         return data.get(question)
 
     def add_cache(self, question: str, answer: str) -> None:
-        # 为缓存写入加锁，防止并发写入损坏文件
+        # 读-改-写在共享锁内完成，防止并发写入丢更新
         with self._lock:
             data = self._read_cache()
+            if data is None:
+                logger.error(f"缓存不可用, 已跳过本次写入以免覆盖整表: {question}")
+                return
             data[question] = answer
             self._write_cache(data)
