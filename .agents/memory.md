@@ -5,8 +5,8 @@
 - 项目专属规则：`AGENTS.md`；人类入口：`README.md` 与 `docs/README.md`；开发与提交细则：`docs/项目工作流.md`、`docs/jj工作流.md`。
 - 通用规则真源：个人工作流 `global/AGENTS.md`，不在本仓库复制；本机位置及自检命令见项目工作流文档。
 - Python 版本约束和安装入口见 `pyproject.toml`；运行依赖来自 `requirements.txt`。测试使用 `unittest`。
-- CLI 已分离为 `chaoxing_app/config.py`、`cli.py`、`jobs.py`，`main.py` 为薄入口；`api/` 已实施施工方案阶段 2-4（`api/answer.py` 已拆为 `api/answer/` 包），会话、视频、测验与签到仍集中在 `api/base.py`（复核时 1528 行，`study_video` 在 `:758`、`study_work` 在 `:898`）。
-- 题库查询管道的回归在 `tests/test_answer_query.py`；其中两条仍待授权修复的缺陷以 `expectedFailure` 标记，修复后必须移除标记。
+- CLI 已分离为 `chaoxing_app/config.py`、`cli.py`、`jobs.py`，`main.py` 为薄入口；`api/` 已实施施工方案阶段 2-4（`api/answer.py` 已拆为 `api/answer/` 包），会话、视频、测验与签到仍集中在 `api/base.py`（本轮修复后 1546 行，`study_video` 在 `:772`、`study_work` 在 `:912`）。
+- 题库查询管道的回归在 `tests/test_answer_query.py`；原先标记的两条 `expectedFailure` 已随修复移除，当前无 `expectedFailure`。
 
 ## 版本控制
 
