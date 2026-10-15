@@ -74,7 +74,10 @@ def process_job(chaoxing: Chaoxing, course: dict, job: dict, job_info: dict, spe
                 course_id=course.get("courseId"),
             )
             # 调用方已等待直播完成，无需再创建一个立即 join 的线程。
-            LiveProcessor.run_live(live, speed)
+            # 失败必须向外传播: 以前丢弃返回值会让未完成的直播也被记为成功
+            if not LiveProcessor.run_live(live, speed):
+                logger.error("直播任务未完成，返回失败以交给章节重试")
+                return StudyResult.ERROR
             return StudyResult.SUCCESS
         except Exception as exc:
             logger.error(f"处理直播任务时出错: {exc}")

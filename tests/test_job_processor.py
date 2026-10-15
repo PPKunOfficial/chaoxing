@@ -163,6 +163,36 @@ class JobProcessorTestCase(unittest.TestCase):
         self.assertEqual(task.result, main.ChapterResult.SUCCESS)
         self.assertEqual(task.tries, 0)
 
+class LiveJobResultTest(unittest.TestCase):
+    """直播任务失败必须向外传播, 不能再被记为 SUCCESS。"""
+
+    class _LiveChaoxing(DummyChaoxing):
+        def get_uid(self):
+            return "uid"
+
+    def _job(self):
+        return {"type": "live", "jobid": "live-1"}
+
+    def _run(self, run_live_return):
+        job = self._job()
+        chaoxing = self._LiveChaoxing({"jobs": [job], "job_info": {"knowledgeid": "k"}})
+        with patch.object(main.LiveProcessor, "run_live", return_value=run_live_return) as run_live:
+            result = main.process_job(
+                chaoxing,
+                {"title": "课程", "clazzId": "1", "courseId": "2"},
+                job,
+                {"knowledgeid": "k"},
+                1.0,
+            )
+        self.assertEqual(run_live.call_count, 1)
+        return result
+
+    def test_live_failure_returns_error(self):
+        self.assertEqual(self._run(False), main.StudyResult.ERROR)
+
+    def test_live_success_returns_success(self):
+        self.assertEqual(self._run(True), main.StudyResult.SUCCESS)
+
 
 if __name__ == "__main__":
     unittest.main()

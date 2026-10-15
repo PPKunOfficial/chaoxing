@@ -35,9 +35,10 @@ class LiveProcessor:
             success = live.do_finish()  # 提交当前时长
             if not success:
                 logger.warning(f"第{i + 1}分钟时长提交失败，将重试")
-                # 失败重试一次
+                # 失败重试一次; 第二次仍失败只记录, 不改控制流, 避免重复上报已计入的时长
                 time.sleep(5)
-                live.do_finish()
+                if not live.do_finish():
+                    logger.error(f"第{i + 1}分钟时长重试仍失败，继续下一分钟")
 
             # 根据倍速调整间隔时间
             sleep_time = 59 / speed
