@@ -910,7 +910,8 @@ class Chaoxing:
             return StudyResult.SUCCESS
 
     def study_work(self, _course, _job, _job_info) -> StudyResult:
-        if self.tiku.DISABLE or not self.tiku:
+        # 先判空再访问属性: 顺序写反时 tiku=None 会先求值 self.tiku.DISABLE 而抛异常
+        if self.tiku is None or self.tiku.DISABLE:
             return StudyResult.SUCCESS
 
         _session = SessionManager.get_session()

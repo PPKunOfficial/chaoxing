@@ -13,7 +13,7 @@ import inspect
 import unittest
 
 from api.answer.registry import DummyTiku
-from api.base import Chaoxing
+from api.base import Chaoxing, StudyResult
 
 
 class WorkRetryStateTest(unittest.TestCase):
@@ -25,5 +25,21 @@ class WorkRetryStateTest(unittest.TestCase):
         self.assertNotIn("self.rollback_times", inspect.getsource(Chaoxing))
 
 
+class WorkWithoutTikuTest(unittest.TestCase):
+    """无题库实例时按"跳过该任务点"处理, 不得因访问顺序抛 AttributeError。"""
+
+    def test_missing_tiku_short_circuits_to_success(self):
+        chaoxing = Chaoxing(account=None, tiku=None)
+        self.assertEqual(
+            chaoxing.study_work({}, {"jobid": "work-1"}, {}),
+            StudyResult.SUCCESS,
+        )
+
+    def test_disabled_tiku_short_circuits_to_success(self):
+        chaoxing = Chaoxing(account=None, tiku=DummyTiku())
+        self.assertEqual(
+            chaoxing.study_work({}, {"jobid": "work-1"}, {}),
+            StudyResult.SUCCESS,
+        )
 if __name__ == "__main__":
     unittest.main()
