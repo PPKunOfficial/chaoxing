@@ -1,3 +1,5 @@
 include main.py app.py config_template.ini
 include api/README.md resource/README.md
 recursive-include docs *.md
+recursive-include tests *.py
+recursive-include tests/fixtures/api_contracts *.md *.json *.html
